@@ -1,0 +1,24 @@
+[package]
+name = "ls"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Memory-mapped high-speed POSIX directory, CAS object, and AST structural listing engine with byte-exact ANSI/JSON output."
+
+[[bin]]
+name = "ls"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+ls-domain = { path = "../ls-domain" }
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true

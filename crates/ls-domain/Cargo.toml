@@ -1,0 +1,16 @@
+[package]
+name = "ls-domain"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "ls (Live Stream & Object Listing Engine) - Zero-I/O domain types and algebraic state models."
+
+[lints]
+workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
