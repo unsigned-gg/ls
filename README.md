@@ -60,6 +60,7 @@ make smoke
 ```
 
 ## Specifications & Sessions
+- Architectural Roadmap: [ROADMAP.md](ROADMAP.md) · [SPEC-0002-initial-roadmap.md](specs/SPEC-0002-initial-roadmap.md)
 - Formal Architecture Specification: [SPEC-0001-leanspec-ast.md](specs/SPEC-0001-leanspec-ast.md)
 - Elf Conclave Transcript: [2026-10-11-ls-formal-ast.irc](sessions/2026-10-11-ls-formal-ast.irc)
 

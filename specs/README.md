@@ -10,6 +10,7 @@ boundary rule, and verification gate is specified as an individual, versioned co
 | Spec | Title | Status | Priority |
 |---|---|---|---|
 | [SPEC-0001-leanspec-ast.md](./SPEC-0001-leanspec-ast.md) | LeanSpec AST Grammar, CAS & Verification | complete | critical |
+| [SPEC-0002-initial-roadmap.md](./SPEC-0002-initial-roadmap.md) | Initial Architecture Roadmap and Development Milestones | in-progress | high |
 
 ## Specification Lifecycle
 
