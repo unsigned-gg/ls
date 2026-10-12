@@ -2,6 +2,7 @@
 //!
 //! Pure data structures with zero I/O.
 
+use crate::lean::{LeanModule, LeanTheorem};
 use serde::{Deserialize, Serialize};
 
 /// Recognized lifecycle statuses of an architectural specification.
@@ -112,6 +113,12 @@ pub struct SpecDocument {
     pub frontmatter: SpecFrontmatter,
     /// Ordered H2 sections.
     pub sections: Vec<SpecSection>,
+    /// Extracted formal theorem statements from embedded Lean 4 blocks.
+    pub theorems: Vec<LeanTheorem>,
+    /// Extracted parsed Lean 4 modules.
+    pub lean_modules: Vec<LeanModule>,
+    /// BLAKE3 digest of the complete specification source text.
+    pub content_hash: String,
     /// Line count of the source file.
     pub line_count: usize,
 }
@@ -123,7 +130,7 @@ pub struct ValidationMessage {
     pub file: String,
     /// Line number (if pinpointed).
     pub line: Option<usize>,
-    /// Rule identifier (e.g. `R01`, `R04`, `R08`).
+    /// Rule identifier (e.g. `R01`, `R04`, `R08`, `R14`).
     pub rule: String,
     /// Descriptive error or warning message.
     pub message: String,
@@ -134,7 +141,7 @@ pub struct ValidationMessage {
 pub struct ValidationReport {
     /// Hard errors violating architectural rules.
     pub errors: Vec<ValidationMessage>,
-    /// Advisory warnings (e.g. approaching line length thresholds).
+    /// Advisory warnings (e.g. approaching line length thresholds or incomplete proofs).
     pub warnings: Vec<ValidationMessage>,
     /// Informational notices.
     pub notices: Vec<String>,

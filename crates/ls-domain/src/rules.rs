@@ -1,11 +1,16 @@
 //! Core LeanSpec validation rules and pure parser logic.
 //!
-//! Evaluates specifications against formal architectural rules (R01-R12).
+//! Evaluates specifications against formal architectural rules (R01-R16).
+//! Extracts embedded Lean 4 theorem statements and computes BLAKE3 CAS hashes.
 //! Zero I/O is performed in this module.
 
+use crate::cas::compute_blake3_hash;
 use crate::document::{
     SpecDocument, SpecFrontmatter, SpecPriority, SpecSection, SpecStatus, ValidationMessage,
     ValidationReport,
+};
+use crate::lean::{
+    extract_lean_blocks, parse_lean_source, LeanTheorem, ProofStatus, MAX_AST_RECURSION_DEPTH,
 };
 
 /// Modern LPSL canonical section order.
@@ -16,13 +21,15 @@ pub const LEGACY_SECTIONS: &[&str] = &["Overview", "Design", "Plan", "Test", "No
 
 /// Parse and validate the specification number and slug from a file name.
 ///
-/// Returns `Some((number, slug))` if format matches `NNNN-kebab-slug.md`.
+/// Returns `Some((number, slug))` if format matches `NNNN-kebab-slug.md` or `SPEC-NNNN-kebab-slug.md`.
 #[must_use]
 pub fn parse_file_name(file_name: &str) -> Option<(String, String)> {
     let name = file_name.strip_suffix(".md")?;
-    let (num_part, slug_part) = name.split_once('-')?;
+    let stripped = name.strip_prefix("SPEC-").unwrap_or(name);
+    let (num_part, slug_part) = stripped.split_once('-')?;
 
-    if num_part.len() == 4 && num_part.chars().all(|c| c.is_ascii_digit()) && !slug_part.is_empty() {
+    if num_part.len() == 4 && num_part.chars().all(|c| c.is_ascii_digit()) && !slug_part.is_empty()
+    {
         let is_kebab = slug_part
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-');
@@ -37,7 +44,11 @@ pub fn parse_file_name(file_name: &str) -> Option<(String, String)> {
 ///
 /// # Errors
 /// Emits errors in `ValidationReport` if frontmatter or structural syntax is broken.
-pub fn parse_spec(file_name: &str, text: &str, report: &mut ValidationReport) -> Option<SpecDocument> {
+pub fn parse_spec(
+    file_name: &str,
+    text: &str,
+    report: &mut ValidationReport,
+) -> Option<SpecDocument> {
     let (number, slug) = match parse_file_name(file_name) {
         Some(pair) => pair,
         None => {
@@ -45,13 +56,17 @@ pub fn parse_spec(file_name: &str, text: &str, report: &mut ValidationReport) ->
                 file: file_name.to_owned(),
                 line: Some(1),
                 rule: "R01".to_owned(),
-                message: "file name must match NNNN-kebab-slug.md".to_owned(),
+                message: "file name must match NNNN-kebab-slug.md or SPEC-NNNN-kebab-slug.md"
+                    .to_owned(),
             });
             return None;
         }
     };
 
-    let stem = file_name.strip_suffix(".md").unwrap_or(file_name).to_owned();
+    let stem = file_name
+        .strip_suffix(".md")
+        .unwrap_or(file_name)
+        .to_owned();
     let lines: Vec<&str> = text.lines().collect();
     let line_count = lines.len();
 
@@ -73,10 +88,17 @@ pub fn parse_spec(file_name: &str, text: &str, report: &mut ValidationReport) ->
     }
 
     // Parse Frontmatter (R02)
-    let frontmatter = match parse_frontmatter(file_name, &lines, report) {
-        Some(fm) => fm,
-        None => return None,
-    };
+    let frontmatter = parse_frontmatter(file_name, &lines, report)?;
+
+    // R15: Self-dependency cycle check
+    if frontmatter.depends_on.contains(&stem) {
+        report.errors.push(ValidationMessage {
+            file: file_name.to_owned(),
+            line: Some(1),
+            rule: "R15".to_owned(),
+            message: format!("specification cannot depend on itself: '{stem}'"),
+        });
+    }
 
     // Find H1 (R04)
     let mut h1 = None;
@@ -116,6 +138,50 @@ pub fn parse_spec(file_name: &str, text: &str, report: &mut ValidationReport) ->
     // Parse H2 Sections (R05, R06)
     let sections = parse_sections(file_name, &lines[start_idx..], start_idx + 1, report);
 
+    // Extract and parse embedded Lean 4 blocks & theorem statements
+    let lean_blocks = extract_lean_blocks(text);
+    let mut lean_modules = Vec::new();
+    let mut theorems: Vec<LeanTheorem> = Vec::new();
+
+    for (start_line, block_src) in lean_blocks {
+        match parse_lean_source(&block_src, start_line, MAX_AST_RECURSION_DEPTH) {
+            Ok(module) => {
+                for th in module.theorems() {
+                    theorems.push(th.clone());
+                }
+                lean_modules.push(module);
+            }
+            Err(err) => {
+                report.errors.push(ValidationMessage {
+                    file: file_name.to_owned(),
+                    line: Some(start_line),
+                    rule: "R15".to_owned(),
+                    message: format!("Lean AST parse error: {err}"),
+                });
+            }
+        }
+    }
+
+    // R14: Check theorem completeness in complete specifications
+    if frontmatter.status == SpecStatus::Complete {
+        for th in &theorems {
+            if matches!(th.proof_status, ProofStatus::Sorry) {
+                report.warnings.push(ValidationMessage {
+                    file: file_name.to_owned(),
+                    line: Some(th.line_number),
+                    rule: "R14".to_owned(),
+                    message: format!(
+                        "theorem '{}' contains 'sorry' proof placeholder in a complete specification",
+                        th.name
+                    ),
+                });
+            }
+        }
+    }
+
+    // Compute canonical BLAKE3 digest of source text
+    let content_hash = compute_blake3_hash(text.as_bytes());
+
     Some(SpecDocument {
         stem,
         number,
@@ -123,6 +189,9 @@ pub fn parse_spec(file_name: &str, text: &str, report: &mut ValidationReport) ->
         h1: h1_title,
         frontmatter,
         sections,
+        theorems,
+        lean_modules,
+        content_hash,
         line_count,
     })
 }
@@ -293,7 +362,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_valid_spec_parse() {
+    fn test_valid_spec_parse_with_lean() {
         let raw = r#"---
 status: complete
 created: 2026-10-11
@@ -304,19 +373,26 @@ depends_on: [0001-template-architecture]
 
 # 0002-test-spec
 
-## Overview
+## Requirements
 
-Overview body.
+Requirements text.
+
+```lean
+def double (x : Nat) : Nat := x + x
+
+theorem double_zero : double 0 = 0 := by
+  rfl
+```
 
 ## Design
 
 Design body.
 
-## Plan
+## Tasks
 
-Plan body.
+Tasks body.
 
-## Test
+## Verification
 
 ```bash
 cargo test
@@ -334,5 +410,16 @@ Notes body.
         assert_eq!(doc.number, "0002");
         assert_eq!(doc.slug, "test-spec");
         assert_eq!(doc.frontmatter.status, SpecStatus::Complete);
+        assert_eq!(doc.theorems.len(), 1);
+        assert_eq!(doc.theorems[0].name, "double_zero");
+        assert_eq!(doc.content_hash.len(), 64);
+    }
+
+    #[test]
+    fn test_spec_name_with_spec_prefix() {
+        assert_eq!(
+            parse_file_name("SPEC-0001-leanspec-ast.md"),
+            Some(("0001".to_owned(), "leanspec-ast".to_owned()))
+        );
     }
 }

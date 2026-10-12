@@ -2,19 +2,28 @@
 //!
 //! # Architecture & Invariants
 //! Contains zero system call wrappers, zero filesystem operations, and zero network calls.
-//! Provides pure LeanSpec AST parsing, formal structural validation rules (R01-R12),
-//! and Content-Addressed Storage (CAS) listing types.
+//! Provides pure LeanSpec AST parsing, formal structural validation rules (R01-R16),
+//! Lean 4 theorem representations, and Content-Addressed Storage (CAS) listing types.
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
 pub mod cas;
 pub mod document;
+pub mod lean;
 pub mod rules;
 
-pub use cas::{CasEntry, CasEntryType, CasListing};
+pub use cas::{
+    compute_blake3_hash, compute_cas_tree_hash, verify_cas_entry, CasEntry, CasEntryType,
+    CasListing,
+};
 pub use document::{
     SpecDocument, SpecFrontmatter, SpecPriority, SpecSection, SpecStatus, ValidationMessage,
     ValidationReport,
+};
+pub use lean::{
+    extract_lean_blocks, parse_lean_source, LeanConstructor, LeanDeclaration, LeanDef, LeanField,
+    LeanInductive, LeanModule, LeanParameter, LeanStructure, LeanTheorem, ProofStatus,
+    MAX_AST_RECURSION_DEPTH,
 };
 pub use rules::{parse_file_name, parse_spec, LEGACY_SECTIONS, MODERN_SECTIONS};

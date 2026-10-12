@@ -1,12 +1,10 @@
-// SPDX-License-Identifier: Apache-2.0 OR MIT
-//! Filesystem scanner and specification conformance checker for LeanSpec suites.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
 use ls_domain::{
-    parse_file_name, parse_spec, SpecDocument, ValidationMessage, ValidationReport,
+    compute_blake3_hash, parse_file_name, parse_spec, CasEntry, CasEntryType, CasListing,
+    SpecDocument, ValidationMessage, ValidationReport,
 };
 
 /// Result of scanning a specification directory.
@@ -120,7 +118,9 @@ pub fn scan_specs_dir(dir: &Path) -> Result<ScanResult, std::io::Error> {
                     file: rel_path.clone(),
                     line: Some(1),
                     rule: "R03".to_owned(),
-                    message: format!("depends_on stem '{dep}' does not exist in specification suite"),
+                    message: format!(
+                        "depends_on stem '{dep}' does not exist in specification suite"
+                    ),
                 });
             }
         }
@@ -171,12 +171,7 @@ fn strip_inline_code(line: &str) -> String {
 }
 
 /// R12: Relative links must resolve to existing files.
-fn check_relative_links(
-    file_rel: &str,
-    dir: &Path,
-    content: &str,
-    report: &mut ValidationReport,
-) {
+fn check_relative_links(file_rel: &str, dir: &Path, content: &str, report: &mut ValidationReport) {
     let mut in_code_block = false;
     for (line_idx, line) in content.lines().enumerate() {
         let line_num = line_idx + 1;
@@ -279,8 +274,80 @@ fn check_readme_index(
     }
 }
 
+/// Scans a path and computes its content-addressed BLAKE3 digest.
+/// If `path` is a file, returns its file digest.
+/// If `path` is a directory, returns the CAS Merkle tree root hash.
+///
+/// # Errors
+/// Returns an I/O error if files cannot be read.
+pub fn scan_cas_path(path: &Path) -> Result<String, std::io::Error> {
+    if path.is_file() {
+        let bytes = fs::read(path)?;
+        Ok(compute_blake3_hash(&bytes))
+    } else if path.is_dir() {
+        let listing = scan_cas_directory(path)?;
+        Ok(listing.root_hash)
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("path '{}' not found", path.display()),
+        ))
+    }
+}
+
+/// Recursively scans a directory into a deterministic `CasListing`.
+///
+/// Ignores `.git` and `target` directories.
+///
+/// # Errors
+/// Returns an I/O error if directory traversal fails.
+pub fn scan_cas_directory(dir: &Path) -> Result<CasListing, std::io::Error> {
+    let mut entries = Vec::new();
+    collect_cas_entries(dir, dir, &mut entries)?;
+    Ok(CasListing::from_entries(entries))
+}
+
+fn collect_cas_entries(
+    root: &Path,
+    current: &Path,
+    entries: &mut Vec<CasEntry>,
+) -> Result<(), std::io::Error> {
+    if !current.exists() {
+        return Ok(());
+    }
+
+    for entry in fs::read_dir(current)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = entry.file_name();
+        let name_str = file_name.to_string_lossy();
+
+        if name_str == ".git" || name_str == "target" || name_str == ".cargo" {
+            continue;
+        }
+
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            collect_cas_entries(root, &path, entries)?;
+        } else if file_type.is_file() {
+            let rel_path = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            let bytes = fs::read(&path)?;
+            let hash = compute_blake3_hash(&bytes);
+            let size = bytes.len() as u64;
+            entries.push(CasEntry::new(hash, rel_path, size, CasEntryType::Blob));
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     struct TestDir {
@@ -404,4 +471,3 @@ Notes.
         assert!(res.report.errors.iter().any(|e| e.rule == "R12"));
     }
 }
-
