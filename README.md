@@ -1,5 +1,7 @@
 # ls
 
+[![License: Apache-2.0 OR MIT](https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg)](https://github.com/unsigned-gg/.github)
+
 > **LeanSpec AST Parser, Structural Conformance Checker, and CAS Listing Engine**  
 > Fast, deterministic specification parsing, Lean 4 theorem AST extraction, validation rules (R01–R16), and BLAKE3 Content-Addressed Storage listing.  
 > Tri-licensed under `Apache-2.0 OR MIT OR CC0-1.0`.
@@ -66,3 +68,7 @@ Tri-licensed under either of:
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
 - MIT License ([LICENSE-MIT](LICENSE-MIT))
 - Creative Commons Zero 1.0 Universal ([LICENSE-CC0](LICENSE-CC0))
+
+## Principles
+
+See the [unsigned-gg principles](https://github.com/unsigned-gg/.github) for the architectural doctrine and community standards.
