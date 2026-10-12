@@ -1,37 +1,20 @@
-//! Zero-I/O domain models for `ls`.
+//! Pure domain models and validation rules for `ls`.
 //!
-//! # Invariants
-//! This crate contains pure data structures, deterministic state transitions,
-//! and verification assertions. It does not perform I/O, network calls, or system operations.
+//! # Architecture & Invariants
+//! Contains zero system call wrappers, zero filesystem operations, and zero network calls.
+//! Provides pure LeanSpec AST parsing, formal structural validation rules (R01-R12),
+//! and Content-Addressed Storage (CAS) listing types.
 
-use serde::{Deserialize, Serialize};
+#![forbid(unsafe_code)]
+#![deny(missing_docs)]
 
-/// Core state representation for `ls`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct LsState {
-    /// Protocol version.
-    pub version: u32,
-    /// Identifier.
-    pub id: String,
-}
+pub mod cas;
+pub mod document;
+pub mod rules;
 
-impl Default for LsState {
-    fn default() -> Self {
-        Self {
-            version: 1,
-            id: String::from("initial"),
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_default_state() {
-        let state = LsState::default();
-        assert_eq!(state.version, 1);
-        assert_eq!(state.id, "initial");
-    }
-}
+pub use cas::{CasEntry, CasEntryType, CasListing};
+pub use document::{
+    SpecDocument, SpecFrontmatter, SpecPriority, SpecSection, SpecStatus, ValidationMessage,
+    ValidationReport,
+};
+pub use rules::{parse_file_name, parse_spec, LEGACY_SECTIONS, MODERN_SECTIONS};
