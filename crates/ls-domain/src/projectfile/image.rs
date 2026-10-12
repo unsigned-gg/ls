@@ -10,9 +10,9 @@
 //! - Variant vs head collision refusal: rejects variants that shadow publishing heads.
 //! - Deterministic alias default generation.
 
-use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet};
 
 use super::ci::compute_matrix_cells;
 
@@ -175,10 +175,8 @@ impl ImageResolver {
             .and_then(|t| t.as_str())
             .unwrap_or("${head}-${variant}");
 
-        let aliases_defaults = variant_obj
-            .get("aliases")
-            .and_then(|a| a.as_str())
-            == Some("defaults");
+        let aliases_defaults =
+            variant_obj.get("aliases").and_then(|a| a.as_str()) == Some("defaults");
 
         let bare_heads: BTreeSet<String> = variant_obj
             .get("bare")
@@ -293,9 +291,7 @@ impl ImageResolver {
                     } else if bare_heads.contains(h) {
                         v.clone()
                     } else {
-                        tag_template
-                            .replace("${head}", h)
-                            .replace("${variant}", v)
+                        tag_template.replace("${head}", h).replace("${variant}", v)
                     };
 
                     if !cell_tags.contains(&tag) {

@@ -33,4 +33,3 @@ pub use projectfile::{
     JustTargetOptions, JustfileCompiler, ProjectfileInterpolator, ReferenceSpan, TemplateSpan,
 };
 pub use rules::{parse_file_name, parse_spec, LEGACY_SECTIONS, MODERN_SECTIONS};
-

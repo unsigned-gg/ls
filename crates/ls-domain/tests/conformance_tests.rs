@@ -43,7 +43,10 @@ fn test_conformance_interpolation_vectors() {
         let content = fs::read_to_string(&path).expect("read fixture file");
         let data: Value = serde_yaml::from_str(&content).expect("parse fixture YAML");
 
-        let doc = data.get("document").cloned().unwrap_or(Value::Object(Default::default()));
+        let doc = data
+            .get("document")
+            .cloned()
+            .unwrap_or(Value::Object(Default::default()));
         let interpolator = ProjectfileInterpolator::new(&doc);
 
         let cases = data
@@ -52,8 +55,14 @@ fn test_conformance_interpolation_vectors() {
             .expect("fixture cases array");
 
         for (idx, case) in cases.iter().enumerate() {
-            let in_str = case.get("in").and_then(|i| i.as_str()).expect("case in string");
-            let expected_out = case.get("out").and_then(|o| o.as_str()).expect("case out string");
+            let in_str = case
+                .get("in")
+                .and_then(|i| i.as_str())
+                .expect("case in string");
+            let expected_out = case
+                .get("out")
+                .and_then(|o| o.as_str())
+                .expect("case out string");
 
             let actual_out = interpolator.interpolate_string(in_str, None, 0);
             assert_eq!(
@@ -148,7 +157,10 @@ fn test_conformance_ci_dag_vectors() {
                 for (tool, count_val) in exp_counts {
                     let expected_c = count_val.as_u64().unwrap() as usize;
                     let actual_c = res.counts.get(tool).copied().unwrap_or(0);
-                    assert_eq!(actual_c, expected_c, "{fname}: count mismatch for tool {tool}");
+                    assert_eq!(
+                        actual_c, expected_c,
+                        "{fname}: count mismatch for tool {tool}"
+                    );
                 }
             }
 
@@ -156,7 +168,10 @@ fn test_conformance_ci_dag_vectors() {
                 for (tool, arg_val) in exp_args {
                     let expected_a = arg_val.as_str().unwrap();
                     let actual_a = res.args.get(tool).map(String::as_str).unwrap_or("");
-                    assert_eq!(actual_a, expected_a, "{fname}: args mismatch for tool {tool}");
+                    assert_eq!(
+                        actual_a, expected_a,
+                        "{fname}: args mismatch for tool {tool}"
+                    );
                 }
             }
 
@@ -220,11 +235,21 @@ fn test_conformance_image_tagging_vectors() {
                 res.reject
             );
 
-            let exp_cells = exp.get("cells").and_then(|c| c.as_array()).expect("cells in expect");
-            assert_eq!(res.cells.len(), exp_cells.len(), "{fname}: cell count mismatch");
+            let exp_cells = exp
+                .get("cells")
+                .and_then(|c| c.as_array())
+                .expect("cells in expect");
+            assert_eq!(
+                res.cells.len(),
+                exp_cells.len(),
+                "{fname}: cell count mismatch"
+            );
 
             for exp_cell_val in exp_cells {
-                let exp_cell_map = exp_cell_val.get("cell").and_then(|c| c.as_object()).expect("cell map");
+                let exp_cell_map = exp_cell_val
+                    .get("cell")
+                    .and_then(|c| c.as_object())
+                    .expect("cell map");
                 let mut exp_map: BTreeMap<String, String> = BTreeMap::new();
                 for (k, v) in exp_cell_map {
                     let s = match v {
@@ -272,18 +297,28 @@ fn test_conformance_image_tagging_vectors() {
 
 #[test]
 fn test_justfile_lowering_compiler() {
-    let mut resolved = CiResolveResult::default();
-    resolved.runs = vec![
-        "golangci-lint".to_string(),
-        "build-binaries".to_string(),
-        "publish-images".to_string(),
-    ];
-    resolved.counts.insert("golangci-lint".to_string(), 1);
-    resolved.counts.insert("build-binaries".to_string(), 5);
-    resolved.counts.insert("publish-images".to_string(), 1);
-    resolved.args.insert("build-binaries".to_string(), "--release".to_string());
-    resolved.before.push(("golangci-lint".to_string(), "build-binaries".to_string()));
-    resolved.before.push(("build-binaries".to_string(), "publish-images".to_string()));
+    let mut counts = BTreeMap::new();
+    counts.insert("golangci-lint".to_string(), 1);
+    counts.insert("build-binaries".to_string(), 5);
+    counts.insert("publish-images".to_string(), 1);
+
+    let mut args = BTreeMap::new();
+    args.insert("build-binaries".to_string(), "--release".to_string());
+
+    let resolved = CiResolveResult {
+        runs: vec![
+            "golangci-lint".to_string(),
+            "build-binaries".to_string(),
+            "publish-images".to_string(),
+        ],
+        counts,
+        args,
+        before: vec![
+            ("golangci-lint".to_string(), "build-binaries".to_string()),
+            ("build-binaries".to_string(), "publish-images".to_string()),
+        ],
+        reject: None,
+    };
 
     let options = JustTargetOptions::default();
     let justfile = JustfileCompiler::compile(&resolved, &options);

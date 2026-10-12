@@ -167,10 +167,7 @@ pub fn find_spans(text: &str) -> Vec<TemplateSpan> {
 /// Filter transformation for references (`| env`).
 pub fn apply_filter(val: &str, filter: &str) -> Option<String> {
     match filter {
-        "env" => Some(
-            val.to_ascii_uppercase()
-                .replace(['.', '-'], "_"),
-        ),
+        "env" => Some(val.to_ascii_uppercase().replace(['.', '-'], "_")),
         _ => None,
     }
 }
@@ -207,7 +204,10 @@ impl<'a> ProjectfileInterpolator<'a> {
                 };
                 if let Some(Value::Array(arr)) = val {
                     if selector.is_empty() {
-                        return arr.iter().map(|item| (item, item.as_object().map(|_| item))).collect();
+                        return arr
+                            .iter()
+                            .map(|item| (item, item.as_object().map(|_| item)))
+                            .collect();
                     } else if let Ok(idx) = selector.parse::<isize>() {
                         let actual_idx = if idx < 0 {
                             arr.len() as isize + idx
@@ -220,7 +220,11 @@ impl<'a> ProjectfileInterpolator<'a> {
                         }
                         return Vec::new();
                     } else {
-                        let terms: Vec<&str> = selector.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+                        let terms: Vec<&str> = selector
+                            .split(',')
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .collect();
                         for item in arr {
                             if Self::matches_terms(item, &terms) {
                                 return vec![(item, item.as_object().map(|_| item))];
@@ -243,7 +247,11 @@ impl<'a> ProjectfileInterpolator<'a> {
                     _ => None,
                 };
                 if let Some(Value::Object(map)) = val {
-                    let terms: Vec<&str> = selector.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+                    let terms: Vec<&str> = selector
+                        .split(',')
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .collect();
                     let mut results = Vec::new();
                     for (_k, item) in map {
                         if Self::matches_terms(item, &terms) {
@@ -501,7 +509,9 @@ impl<'a> ProjectfileInterpolator<'a> {
                 let mut aborted = false;
 
                 for item in results {
-                    if let Some(rendered) = self.interpolate_template_item(&sp.template, item, depth) {
+                    if let Some(rendered) =
+                        self.interpolate_template_item(&sp.template, item, depth)
+                    {
                         rendered_items.push(rendered);
                     } else {
                         aborted = true;
@@ -522,7 +532,12 @@ impl<'a> ProjectfileInterpolator<'a> {
         res
     }
 
-    fn interpolate_template_item(&self, template: &str, item: &'a Value, _depth: usize) -> Option<String> {
+    fn interpolate_template_item(
+        &self,
+        template: &str,
+        item: &'a Value,
+        _depth: usize,
+    ) -> Option<String> {
         let refs = find_references(template);
         if refs.is_empty() {
             return Some(template.to_string());
@@ -616,7 +631,12 @@ impl<'a> ProjectfileInterpolator<'a> {
         for combo in combos {
             let mut curr_line = text.to_string();
             for ((r, _), chosen_val) in multi_refs.iter().zip(combo.iter()).rev() {
-                curr_line = format!("{}{}{}", &curr_line[..r.start], chosen_val, &curr_line[r.end..]);
+                curr_line = format!(
+                    "{}{}{}",
+                    &curr_line[..r.start],
+                    chosen_val,
+                    &curr_line[r.end..]
+                );
             }
             lines.push(self.interpolate_string(&curr_line, None, 0));
         }

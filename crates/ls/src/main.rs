@@ -206,9 +206,7 @@ fn main() -> ExitCode {
                 }
             }
         }
-        "pf" => {
-            handle_projectfile_command(&args[2..])
-        }
+        "pf" => handle_projectfile_command(&args[2..]),
         unknown => {
             eprintln!("ls: unrecognized command '{unknown}'");
             print_usage();
@@ -283,7 +281,9 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     let val: serde_json::Value = match serde_yaml::from_str(&content) {
                         Ok(v) => v,
                         Err(err) => {
-                            eprintln!("ls pf ci resolve: cannot parse YAML in '{file_path}': {err}");
+                            eprintln!(
+                                "ls pf ci resolve: cannot parse YAML in '{file_path}': {err}"
+                            );
                             return ExitCode::FAILURE;
                         }
                     };
@@ -313,7 +313,9 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     let val: serde_json::Value = match serde_yaml::from_str(&content) {
                         Ok(v) => v,
                         Err(err) => {
-                            eprintln!("ls pf ci generate: cannot parse YAML in '{file_path}': {err}");
+                            eprintln!(
+                                "ls pf ci generate: cannot parse YAML in '{file_path}': {err}"
+                            );
                             return ExitCode::FAILURE;
                         }
                     };
@@ -354,7 +356,9 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     let val: serde_json::Value = match serde_yaml::from_str(&content) {
                         Ok(v) => v,
                         Err(err) => {
-                            eprintln!("ls pf image tags: cannot parse YAML in '{file_path}': {err}");
+                            eprintln!(
+                                "ls pf image tags: cannot parse YAML in '{file_path}': {err}"
+                            );
                             return ExitCode::FAILURE;
                         }
                     };
@@ -381,7 +385,6 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
         }
     }
 }
-
 
 fn print_doc_theorems(doc: &ls::SpecDocument) {
     if doc.theorems.is_empty() {

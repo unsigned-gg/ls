@@ -11,9 +11,9 @@
 //! - Reachable needs-closure pruning.
 //! - Cell fan-out isolation (source runs 1x, join runs 1x, cell runs Nx).
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// Matrix specification defining multidimensional build axes and exclusions.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -86,12 +86,24 @@ pub fn normalize_needs(val: Option<&Value>) -> BTreeMap<String, CiNeedOption> {
 
     match v {
         Value::String(s) => {
-            map.insert(s.clone(), CiNeedOption { enabled: true, args: None });
+            map.insert(
+                s.clone(),
+                CiNeedOption {
+                    enabled: true,
+                    args: None,
+                },
+            );
         }
         Value::Array(arr) => {
             for item in arr {
                 if let Value::String(s) = item {
-                    map.insert(s.clone(), CiNeedOption { enabled: true, args: None });
+                    map.insert(
+                        s.clone(),
+                        CiNeedOption {
+                            enabled: true,
+                            args: None,
+                        },
+                    );
                 }
             }
         }
@@ -99,18 +111,42 @@ pub fn normalize_needs(val: Option<&Value>) -> BTreeMap<String, CiNeedOption> {
             for (k, opt) in obj {
                 match opt {
                     Value::Bool(b) => {
-                        map.insert(k.clone(), CiNeedOption { enabled: *b, args: None });
+                        map.insert(
+                            k.clone(),
+                            CiNeedOption {
+                                enabled: *b,
+                                args: None,
+                            },
+                        );
                     }
                     Value::Object(inner) => {
-                        let enabled = inner.get("enabled").and_then(|e| e.as_bool()).unwrap_or(true);
-                        let args = inner.get("args").and_then(|a| a.as_str()).map(ToString::to_string);
+                        let enabled = inner
+                            .get("enabled")
+                            .and_then(|e| e.as_bool())
+                            .unwrap_or(true);
+                        let args = inner
+                            .get("args")
+                            .and_then(|a| a.as_str())
+                            .map(ToString::to_string);
                         map.insert(k.clone(), CiNeedOption { enabled, args });
                     }
                     Value::Null => {
-                        map.insert(k.clone(), CiNeedOption { enabled: false, args: None });
+                        map.insert(
+                            k.clone(),
+                            CiNeedOption {
+                                enabled: false,
+                                args: None,
+                            },
+                        );
                     }
                     _ => {
-                        map.insert(k.clone(), CiNeedOption { enabled: true, args: None });
+                        map.insert(
+                            k.clone(),
+                            CiNeedOption {
+                                enabled: true,
+                                args: None,
+                            },
+                        );
                     }
                 }
             }
@@ -245,7 +281,9 @@ impl CiResolver {
         // 4. Cycle detection (DFS with 3 colors: 0=unvisited, 1=visiting, 2=visited)
         let mut visited: BTreeMap<String, u8> = BTreeMap::new();
         for node in &declared_nodes {
-            if *visited.get(node).unwrap_or(&0) == 0 && Self::has_cycle(node, &merged_nodes, &declared_nodes, &mut visited) {
+            if *visited.get(node).unwrap_or(&0) == 0
+                && Self::has_cycle(node, &merged_nodes, &declared_nodes, &mut visited)
+            {
                 return CiResolveResult::rejected("cycle");
             }
         }
@@ -368,7 +406,11 @@ impl CiResolver {
         }
 
         let matrix_cells = compute_matrix_cells(input_val.get("matrix"));
-        let num_cells = if matrix_cells.is_empty() { 1 } else { matrix_cells.len() };
+        let num_cells = if matrix_cells.is_empty() {
+            1
+        } else {
+            matrix_cells.len()
+        };
 
         // 9. Collect tools in topological order
         let mut tool_order: Vec<String> = Vec::new();
