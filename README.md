@@ -16,53 +16,53 @@
 | Crate | Responsibility |
 |---|---|
 | `crates/ls-domain` | Pure zero-I/O LeanSpec AST types, Lean 4 theorem statements, frontmatter parser, BLAKE3 CAS algorithms, and rule validators (R01–R16). |
-| `crates/ls` | CLI binary (`ls`) and filesystem scanner for specification suites (`ls check`, `ls hash`, `ls list`, `ls parse`, `ls theorems`). |
+| `crates/ls` | CLI binary (`lsc`) and filesystem scanner for specification suites (`lsc check`, `lsc hash`, `lsc list`, `lsc parse`, `lsc theorems`). |
 
 ## CLI Usage
 
 ### Check Specification Suite
 ```bash
 # Validate LeanSpec specifications against rules R01-R16
-ls check specs/
+lsc check specs/
 ```
 
 ### Compute CAS Root Hash
 ```bash
 # Compute deterministic BLAKE3 digest of file or directory tree
-ls hash specs/
+lsc hash specs/
 ```
 
 ### List Specifications
 ```bash
 # Display tabular summary of specifications with status, priority, theorem count, lines, and BLAKE3 hash
-ls list specs/
+lsc list specs/
 ```
 
 ### Parse Specification to JSON AST
 ```bash
 # Parse a single specification into structured JSON AST with theorems
-ls parse specs/SPEC-0001-leanspec-ast.md
+lsc parse specs/SPEC-0001-leanspec-ast.md
 ```
 
 ### List Formal Theorems
 ```bash
 # List all formal Lean 4 theorems, verification statuses, and tactic counts
-ls theorems specs/
+lsc theorems specs/
 ```
 
 ### Projectfile CLI Operations
 ```bash
 # Interpolate projectfile string references (§3.8)
-ls pf interp projectfile.yaml
+lsc pf interp projectfile.yaml
 
 # Resolve org.projectfile.ci intent DAG and print execution plan
-ls pf ci resolve projectfile.yaml
+lsc pf ci resolve projectfile.yaml
 
 # Lower CI intent DAG into a deterministic Justfile
-ls pf ci generate projectfile.yaml --target just
+lsc pf ci generate projectfile.yaml --target just
 
 # Derive container image variant tags from org.projectfile.image
-ls pf image tags projectfile.yaml
+lsc pf image tags projectfile.yaml
 ```
 
 ## Building

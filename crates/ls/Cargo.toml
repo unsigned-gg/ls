@@ -11,7 +11,7 @@ description = "LeanSpec parser — formal Lean specification parser, structural 
 
 
 [[bin]]
-name = "ls"
+name = "lsc"
 path = "src/main.rs"
 
 [lints]
