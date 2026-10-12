@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-//! `ls` — LeanSpec AST parser, architectural validator, and CAS listing engine CLI.
+//! `lsc` — LeanSpec AST parser, architectural validator, and CAS listing engine CLI.
 
 use std::env;
 use std::fs;
@@ -11,24 +11,24 @@ use ls::{
 };
 
 fn print_usage() {
-    println!("ls — LeanSpec AST parser, architectural validator & CAS listing engine");
+    println!("lsc — LeanSpec AST parser, architectural validator & CAS listing engine");
     println!();
     println!("USAGE:");
-    println!("    ls check [DIR]        Validate specifications in DIR (default: specs/)");
+    println!("    lsc check [DIR]        Validate specifications in DIR (default: specs/)");
     println!(
-        "    ls hash [PATH]        Compute BLAKE3 CAS hash of file or directory (default: specs/)"
+        "    lsc hash [PATH]        Compute BLAKE3 CAS hash of file or directory (default: specs/)"
     );
     println!(
-        "    ls list [DIR]         List specifications with metadata in DIR (default: specs/)"
+        "    lsc list [DIR]         List specifications with metadata in DIR (default: specs/)"
     );
-    println!("    ls parse <FILE>       Parse single specification file into JSON AST");
-    println!("    ls theorems [PATH]    List formal theorem statements & verification status");
-    println!("    ls pf interp <FILE>   Interpolate projectfile expressions (§3.8)");
-    println!("    ls pf ci resolve <F>  Resolve org.projectfile.ci intent DAG");
-    println!("    ls pf ci generate <F> Lower DAG to Justfile (--target just)");
-    println!("    ls pf image tags <F>  Derive org.projectfile.image variant tags");
-    println!("    ls --version, -v      Print version information");
-    println!("    ls --help, -h         Print this help message");
+    println!("    lsc parse <FILE>       Parse single specification file into JSON AST");
+    println!("    lsc theorems [PATH]    List formal theorem statements & verification status");
+    println!("    lsc pf interp <FILE>   Interpolate projectfile expressions (§3.8)");
+    println!("    lsc pf ci resolve <F>  Resolve org.projectfile.ci intent DAG");
+    println!("    lsc pf ci generate <F> Lower DAG to Justfile (--target just)");
+    println!("    lsc pf image tags <F>  Derive org.projectfile.image variant tags");
+    println!("    lsc --version, -v      Print version information");
+    println!("    lsc --help, -h         Print this help message");
 }
 
 fn main() -> ExitCode {
@@ -41,7 +41,7 @@ fn main() -> ExitCode {
 
     match args[1].as_str() {
         "--version" | "-v" => {
-            println!("ls {}", env!("CARGO_PKG_VERSION"));
+            println!("lsc {}", env!("CARGO_PKG_VERSION"));
             ExitCode::SUCCESS
         }
         "--help" | "-h" => {
@@ -62,7 +62,7 @@ fn main() -> ExitCode {
                     }
                 }
                 Err(err) => {
-                    eprintln!("ls: failed to scan directory '{}': {err}", path.display());
+                    eprintln!("lsc: failed to scan directory '{}': {err}", path.display());
                     ExitCode::FAILURE
                 }
             }
@@ -78,7 +78,7 @@ fn main() -> ExitCode {
                 }
                 Err(err) => {
                     eprintln!(
-                        "ls: cannot compute CAS hash for '{}': {err}",
+                        "lsc: cannot compute CAS hash for '{}': {err}",
                         path.display()
                     );
                     ExitCode::FAILURE
@@ -124,14 +124,14 @@ fn main() -> ExitCode {
                     ExitCode::SUCCESS
                 }
                 Err(err) => {
-                    eprintln!("ls: failed to scan directory '{}': {err}", path.display());
+                    eprintln!("lsc: failed to scan directory '{}': {err}", path.display());
                     ExitCode::FAILURE
                 }
             }
         }
         "parse" => {
             let Some(file_path) = args.get(2) else {
-                eprintln!("ls: parse requires a file path argument");
+                eprintln!("lsc: parse requires a file path argument");
                 return ExitCode::FAILURE;
             };
             let path = Path::new(file_path);
@@ -143,7 +143,7 @@ fn main() -> ExitCode {
             let content = match fs::read_to_string(path) {
                 Ok(c) => c,
                 Err(err) => {
-                    eprintln!("ls: cannot read file '{}': {err}", path.display());
+                    eprintln!("lsc: cannot read file '{}': {err}", path.display());
                     return ExitCode::FAILURE;
                 }
             };
@@ -156,12 +156,12 @@ fn main() -> ExitCode {
                         ExitCode::SUCCESS
                     }
                     Err(err) => {
-                        eprintln!("ls: json serialization error: {err}");
+                        eprintln!("lsc: json serialization error: {err}");
                         ExitCode::FAILURE
                     }
                 },
                 None => {
-                    eprintln!("ls: failed to parse spec '{}'", file_name);
+                    eprintln!("lsc: failed to parse spec '{}'", file_name);
                     eprint!("{}", format_report(&report));
                     ExitCode::FAILURE
                 }
@@ -179,7 +179,7 @@ fn main() -> ExitCode {
                 let content = match fs::read_to_string(path) {
                     Ok(c) => c,
                     Err(err) => {
-                        eprintln!("ls: cannot read file '{}': {err}", path.display());
+                        eprintln!("lsc: cannot read file '{}': {err}", path.display());
                         return ExitCode::FAILURE;
                     }
                 };
@@ -188,7 +188,7 @@ fn main() -> ExitCode {
                     print_doc_theorems(&doc);
                     ExitCode::SUCCESS
                 } else {
-                    eprintln!("ls: failed to parse specification '{}'", file_name);
+                    eprintln!("lsc: failed to parse specification '{}'", file_name);
                     ExitCode::FAILURE
                 }
             } else {
@@ -200,7 +200,7 @@ fn main() -> ExitCode {
                         ExitCode::SUCCESS
                     }
                     Err(err) => {
-                        eprintln!("ls: failed to scan directory '{}': {err}", path.display());
+                        eprintln!("lsc: failed to scan directory '{}': {err}", path.display());
                         ExitCode::FAILURE
                     }
                 }
@@ -208,7 +208,7 @@ fn main() -> ExitCode {
         }
         "pf" => handle_projectfile_command(&args[2..]),
         unknown => {
-            eprintln!("ls: unrecognized command '{unknown}'");
+            eprintln!("lsc: unrecognized command '{unknown}'");
             print_usage();
             ExitCode::FAILURE
         }
@@ -217,33 +217,33 @@ fn main() -> ExitCode {
 
 fn handle_projectfile_command(args: &[String]) -> ExitCode {
     if args.is_empty() || args[0] == "--help" || args[0] == "-h" {
-        println!("ls pf — Projectfile v1 normative engine & DAG compiler");
+        println!("lsc pf — Projectfile v1 normative engine & DAG compiler");
         println!();
         println!("USAGE:");
-        println!("    ls pf interp <FILE> [--expr <EXPR>]    Interpolate projectfile (§3.8)");
-        println!("    ls pf ci resolve <FILE>                Resolve org.projectfile.ci DAG");
-        println!("    ls pf ci generate <FILE> [--target just] Lower DAG to Justfile");
-        println!("    ls pf image tags <FILE>                Derive org.projectfile.image tags");
+        println!("    lsc pf interp <FILE> [--expr <EXPR>]    Interpolate projectfile (§3.8)");
+        println!("    lsc pf ci resolve <FILE>                Resolve org.projectfile.ci DAG");
+        println!("    lsc pf ci generate <FILE> [--target just] Lower DAG to Justfile");
+        println!("    lsc pf image tags <FILE>                Derive org.projectfile.image tags");
         return ExitCode::SUCCESS;
     }
 
     match args[0].as_str() {
         "interp" => {
             let Some(file_path) = args.get(1) else {
-                eprintln!("ls pf: interp requires a file path argument");
+                eprintln!("lsc pf: interp requires a file path argument");
                 return ExitCode::FAILURE;
             };
             let content = match fs::read_to_string(file_path) {
                 Ok(c) => c,
                 Err(err) => {
-                    eprintln!("ls pf: cannot read file '{file_path}': {err}");
+                    eprintln!("lsc pf: cannot read file '{file_path}': {err}");
                     return ExitCode::FAILURE;
                 }
             };
             let val: serde_json::Value = match serde_yaml::from_str(&content) {
                 Ok(v) => v,
                 Err(err) => {
-                    eprintln!("ls pf: cannot parse YAML in '{file_path}': {err}");
+                    eprintln!("lsc pf: cannot parse YAML in '{file_path}': {err}");
                     return ExitCode::FAILURE;
                 }
             };
@@ -262,19 +262,19 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
         }
         "ci" => {
             if args.len() < 2 {
-                eprintln!("ls pf ci: requires a subcommand: 'resolve' or 'generate'");
+                eprintln!("lsc pf ci: requires a subcommand: 'resolve' or 'generate'");
                 return ExitCode::FAILURE;
             }
             match args[1].as_str() {
                 "resolve" => {
                     let Some(file_path) = args.get(2) else {
-                        eprintln!("ls pf ci resolve: requires a file path argument");
+                        eprintln!("lsc pf ci resolve: requires a file path argument");
                         return ExitCode::FAILURE;
                     };
                     let content = match fs::read_to_string(file_path) {
                         Ok(c) => c,
                         Err(err) => {
-                            eprintln!("ls pf ci resolve: cannot read file '{file_path}': {err}");
+                            eprintln!("lsc pf ci resolve: cannot read file '{file_path}': {err}");
                             return ExitCode::FAILURE;
                         }
                     };
@@ -282,7 +282,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         Ok(v) => v,
                         Err(err) => {
                             eprintln!(
-                                "ls pf ci resolve: cannot parse YAML in '{file_path}': {err}"
+                                "lsc pf ci resolve: cannot parse YAML in '{file_path}': {err}"
                             );
                             return ExitCode::FAILURE;
                         }
@@ -291,7 +291,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     let json = match serde_json::to_string_pretty(&res) {
                         Ok(j) => j,
                         Err(err) => {
-                            eprintln!("ls pf ci resolve: json serialization error: {err}");
+                            eprintln!("lsc pf ci resolve: json serialization error: {err}");
                             return ExitCode::FAILURE;
                         }
                     };
@@ -300,13 +300,13 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                 }
                 "generate" => {
                     let Some(file_path) = args.get(2) else {
-                        eprintln!("ls pf ci generate: requires a file path argument");
+                        eprintln!("lsc pf ci generate: requires a file path argument");
                         return ExitCode::FAILURE;
                     };
                     let content = match fs::read_to_string(file_path) {
                         Ok(c) => c,
                         Err(err) => {
-                            eprintln!("ls pf ci generate: cannot read file '{file_path}': {err}");
+                            eprintln!("lsc pf ci generate: cannot read file '{file_path}': {err}");
                             return ExitCode::FAILURE;
                         }
                     };
@@ -314,14 +314,14 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         Ok(v) => v,
                         Err(err) => {
                             eprintln!(
-                                "ls pf ci generate: cannot parse YAML in '{file_path}': {err}"
+                                "lsc pf ci generate: cannot parse YAML in '{file_path}': {err}"
                             );
                             return ExitCode::FAILURE;
                         }
                     };
                     let res = ls::CiResolver::resolve_fixture(&val);
                     if let Some(ref reject) = res.reject {
-                        eprintln!("ls pf ci generate: DAG rejected with code: '{reject}'");
+                        eprintln!("lsc pf ci generate: DAG rejected with code: '{reject}'");
                         return ExitCode::FAILURE;
                     }
                     let options = ls::JustTargetOptions::default();
@@ -330,26 +330,26 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     ExitCode::SUCCESS
                 }
                 unknown => {
-                    eprintln!("ls pf ci: unrecognized subcommand '{unknown}'");
+                    eprintln!("lsc pf ci: unrecognized subcommand '{unknown}'");
                     ExitCode::FAILURE
                 }
             }
         }
         "image" => {
             if args.len() < 2 {
-                eprintln!("ls pf image: requires a subcommand: 'tags'");
+                eprintln!("lsc pf image: requires a subcommand: 'tags'");
                 return ExitCode::FAILURE;
             }
             match args[1].as_str() {
                 "tags" => {
                     let Some(file_path) = args.get(2) else {
-                        eprintln!("ls pf image tags: requires a file path argument");
+                        eprintln!("lsc pf image tags: requires a file path argument");
                         return ExitCode::FAILURE;
                     };
                     let content = match fs::read_to_string(file_path) {
                         Ok(c) => c,
                         Err(err) => {
-                            eprintln!("ls pf image tags: cannot read file '{file_path}': {err}");
+                            eprintln!("lsc pf image tags: cannot read file '{file_path}': {err}");
                             return ExitCode::FAILURE;
                         }
                     };
@@ -357,7 +357,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         Ok(v) => v,
                         Err(err) => {
                             eprintln!(
-                                "ls pf image tags: cannot parse YAML in '{file_path}': {err}"
+                                "lsc pf image tags: cannot parse YAML in '{file_path}': {err}"
                             );
                             return ExitCode::FAILURE;
                         }
@@ -366,7 +366,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     let json = match serde_json::to_string_pretty(&res) {
                         Ok(j) => j,
                         Err(err) => {
-                            eprintln!("ls pf image tags: json serialization error: {err}");
+                            eprintln!("lsc pf image tags: json serialization error: {err}");
                             return ExitCode::FAILURE;
                         }
                     };
@@ -374,13 +374,13 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     ExitCode::SUCCESS
                 }
                 unknown => {
-                    eprintln!("ls pf image: unrecognized subcommand '{unknown}'");
+                    eprintln!("lsc pf image: unrecognized subcommand '{unknown}'");
                     ExitCode::FAILURE
                 }
             }
         }
         unknown => {
-            eprintln!("ls pf: unrecognized command '{unknown}'");
+            eprintln!("lsc pf: unrecognized command '{unknown}'");
             ExitCode::FAILURE
         }
     }
