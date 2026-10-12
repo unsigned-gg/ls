@@ -11,6 +11,7 @@
 pub mod cas;
 pub mod document;
 pub mod lean;
+pub mod projectfile;
 pub mod rules;
 
 pub use cas::{
@@ -25,5 +26,10 @@ pub use lean::{
     extract_lean_blocks, parse_lean_source, LeanConstructor, LeanDeclaration, LeanDef, LeanField,
     LeanInductive, LeanModule, LeanParameter, LeanStructure, LeanTheorem, ProofStatus,
     MAX_AST_RECURSION_DEPTH,
+};
+pub use projectfile::{
+    compute_matrix_cells, find_references, find_spans, normalize_needs, CiMatrixDef, CiNeedOption,
+    CiNode, CiResolveResult, CiResolver, ImageCellResult, ImageResolveResult, ImageResolver,
+    JustTargetOptions, JustfileCompiler, ProjectfileInterpolator, ReferenceSpan, TemplateSpan,
 };
 pub use rules::{parse_file_name, parse_spec, LEGACY_SECTIONS, MODERN_SECTIONS};

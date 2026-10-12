@@ -25,6 +25,9 @@ ignore = true
 
 [advisories]
 yanked = "deny"
+ignore = [
+  "RUSTSEC-2024-0449", # unsafe-libyaml unmaintained advisory via serde_yaml
+]
 
 [bans]
 multiple-versions = "warn"
