@@ -9,7 +9,8 @@
 - **Zero-I/O Domain Isolation:** `ls-domain` enforces zero I/O imports (`std::fs`, `std::net`, `std::process` forbidden).
 - **Architectural Rules R01–R16:** Enforces frontmatter integrity, line caps (<= 300 warn, <= 400 error), relative links, canonical section ordering, and theorem completeness.
 - **Content-Addressed Storage (CAS):** 256-bit BLAKE3 cryptographic hashing for individual documents and directory Merkle trees.
-- **CLI Commands:** `ls check`, `ls hash`, `ls list`, `ls parse`, and `ls theorems`.
+- **Projectfile v1 Engine & CI DAG Lowering:** Zero-I/O §3.8 interpolation, `org.projectfile.ci` DAG resolver, `org.projectfile.image` variant tags, and `Justfile` lowering compiler ([SPEC-0003](specs/SPEC-0003-projectfile-ci-lowering.md)).
+- **CLI Commands:** `ls check`, `ls hash`, `ls list`, `ls parse`, `ls theorems`, and `ls pf` (`interp`, `ci resolve`, `ci generate`, `image tags`).
 
 ## Planned Horizons
 
@@ -34,3 +35,4 @@
 ## Specifications Index
 - [SPEC-0001-leanspec-ast.md](specs/SPEC-0001-leanspec-ast.md) — LeanSpec AST Grammar, CAS & Verification (complete)
 - [SPEC-0002-initial-roadmap.md](specs/SPEC-0002-initial-roadmap.md) — Initial Architecture Roadmap and Development Milestones (in-progress)
+- [SPEC-0003-projectfile-ci-lowering.md](specs/SPEC-0003-projectfile-ci-lowering.md) — Projectfile v1 Engine, CI DAG Resolution & Justfile Lowering (complete)

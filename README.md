@@ -50,6 +50,21 @@ ls parse specs/SPEC-0001-leanspec-ast.md
 ls theorems specs/
 ```
 
+### Projectfile CLI Operations
+```bash
+# Interpolate projectfile string references (§3.8)
+ls pf interp projectfile.yaml
+
+# Resolve org.projectfile.ci intent DAG and print execution plan
+ls pf ci resolve projectfile.yaml
+
+# Lower CI intent DAG into a deterministic Justfile
+ls pf ci generate projectfile.yaml --target just
+
+# Derive container image variant tags from org.projectfile.image
+ls pf image tags projectfile.yaml
+```
+
 ## Building
 All builds must specify `-j 2` to prevent memory exhaustion on shared hosts:
 ```bash
@@ -62,6 +77,7 @@ make smoke
 ## Specifications & Sessions
 - Architectural Roadmap: [ROADMAP.md](ROADMAP.md) · [SPEC-0002-initial-roadmap.md](specs/SPEC-0002-initial-roadmap.md)
 - Formal Architecture Specification: [SPEC-0001-leanspec-ast.md](specs/SPEC-0001-leanspec-ast.md)
+- Projectfile Engine & CI Lowering: [SPEC-0003-projectfile-ci-lowering.md](specs/SPEC-0003-projectfile-ci-lowering.md)
 - Elf Conclave Transcript: [2026-10-11-ls-formal-ast.irc](sessions/2026-10-11-ls-formal-ast.irc)
 
 ## License

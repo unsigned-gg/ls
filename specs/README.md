@@ -11,6 +11,7 @@ boundary rule, and verification gate is specified as an individual, versioned co
 |---|---|---|---|
 | [SPEC-0001-leanspec-ast.md](./SPEC-0001-leanspec-ast.md) | LeanSpec AST Grammar, CAS & Verification | complete | critical |
 | [SPEC-0002-initial-roadmap.md](./SPEC-0002-initial-roadmap.md) | Initial Architecture Roadmap and Development Milestones | in-progress | high |
+| [SPEC-0003-projectfile-ci-lowering.md](./SPEC-0003-projectfile-ci-lowering.md) | Projectfile v1 Engine, CI DAG Resolution & Justfile Lowering | complete | critical |
 
 ## Specification Lifecycle
 
