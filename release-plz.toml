@@ -8,12 +8,15 @@ git_only = true
 # One version, one tag, one changelog for the whole workspace.
 git_tag_enable = false
 git_release_enable = false
+# Every crate shares the workspace version, so every crate finds its previous release at
+# the same vX.Y.Z tag. Without this, release-plz sees no tag for ls-domain and xtask,
+# treats them as initial releases and skips their semver check.
+git_tag_name = "v{{ version }}"
 changelog_update = false
 pr_labels = ["release"]
 
 [[package]]
 name = "ls"
-git_tag_name = "v{{ version }}"
 git_tag_enable = true
 git_release_enable = true
 changelog_update = true
