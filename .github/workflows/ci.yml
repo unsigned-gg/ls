@@ -44,7 +44,7 @@ jobs:
               - 'rustfmt.toml'
               - 'deny.toml'
               - '.cargo/**'
-              - 'Justfile'
+              - 'projectfile.yaml'
               - 'Makefile'
               - '.github/workflows/ci.yml'
             deps:
