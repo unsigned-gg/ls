@@ -22,3 +22,8 @@ git_release_enable = true
 changelog_update = true
 changelog_path = "./CHANGELOG.md"
 changelog_include = ["ls-domain"]
+
+# Repo automation, not shipped, and it did not exist at v0.1.0.
+[[package]]
+name = "xtask"
+release = false
