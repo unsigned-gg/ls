@@ -23,7 +23,10 @@ changelog_update = true
 changelog_path = "./CHANGELOG.md"
 changelog_include = ["ls-domain"]
 
-# Repo automation, not shipped, and it did not exist at v0.1.0.
+# Repo automation, not shipped. It did not exist at the v0.1.0 baseline tag, and release-plz
+# fails when a package has a baseline tag but is missing from that revision. A tag pattern
+# that matches nothing makes it an initial release with no baseline to compare.
 [[package]]
 name = "xtask"
 release = false
+git_tag_name = "xtask-v{{ version }}"
