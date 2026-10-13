@@ -1,0 +1,21 @@
+# release-plz: a release PR bumps the workspace version and writes CHANGELOG.md from
+# conventional commits. Merging it tags vX.Y.Z and creates the GitHub release, and the
+# tag push runs package.yml, which publishes and signs the image.
+# Nothing is published to crates.io (publish = false), so versions come from git tags.
+
+[workspace]
+git_only = true
+# One version, one tag, one changelog for the whole workspace.
+git_tag_enable = false
+git_release_enable = false
+changelog_update = false
+pr_labels = ["release"]
+
+[[package]]
+name = "ls"
+git_tag_name = "v{{ version }}"
+git_tag_enable = true
+git_release_enable = true
+changelog_update = true
+changelog_path = "./CHANGELOG.md"
+changelog_include = ["ls-domain"]
