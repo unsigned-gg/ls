@@ -2,8 +2,9 @@
 //! Repo automation, run with `cargo xtask <command>`.
 //!
 //! - `spec-check`: run `lsc check specs/` on this repository's own specifications.
+//! - `projectfile-check`: run `lsc pf ci resolve projectfile.yaml` on this repository's projectfile.
 //! - `toolchain-check`: verify the active Rust matches `rust-toolchain.toml`.
-//! - `xwork`: run the full verification pipeline (`toolchain-check`, `spec-check`, `zero-io-domain`, `fmt-check`, `clippy`, `test`, `doc-test`).
+//! - `xwork`: run the full verification pipeline (`toolchain-check`, `spec-check`, `projectfile-check`, `zero-io-domain`, `fmt-check`, `clippy`, `test`, `doc-test`).
 //! - `verify-signed <owner/repo> <pr>`: require GitHub-verified signatures on every PR commit.
 //! - `image-tags <ref> <sha>`: print the image tags a publish from that ref gets.
 //! - `package`: build the static musl `lsc` into `dist/lsc`.
@@ -33,6 +34,36 @@ fn spec_check(root: &Path) -> ExitCode {
         }
         Err(err) => {
             eprintln!("spec-check: cannot run cargo: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn projectfile_check(root: &Path) -> ExitCode {
+    let status = Command::new(env!("CARGO"))
+        .args([
+            "run",
+            "-q",
+            "-p",
+            "ls",
+            "-j",
+            "2",
+            "--",
+            "pf",
+            "ci",
+            "resolve",
+            "projectfile.yaml",
+        ])
+        .current_dir(root)
+        .status();
+    match status {
+        Ok(s) if s.success() => ExitCode::SUCCESS,
+        Ok(_) => {
+            eprintln!("projectfile-check: `lsc pf ci resolve projectfile.yaml` reported errors");
+            ExitCode::FAILURE
+        }
+        Err(err) => {
+            eprintln!("projectfile-check: cannot run cargo: {err}");
             ExitCode::FAILURE
         }
     }
@@ -110,6 +141,11 @@ fn run_xwork(root: &Path) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
+    println!("xwork: [projectfile-check] running...");
+    if projectfile_check(root) != ExitCode::SUCCESS {
+        return ExitCode::FAILURE;
+    }
+
     println!("xwork: [zero-io-domain] running...");
     if let Err(err) = verify_zero_io_domain(root) {
         eprintln!("zero-io-domain: {err}");
@@ -160,6 +196,7 @@ fn main() -> ExitCode {
     let rest = args.get(1..).unwrap_or_default().to_vec();
     match args.first().map(String::as_str) {
         Some("spec-check") => spec_check(&root),
+        Some("projectfile-check") => projectfile_check(&root),
         Some("toolchain-check") => toolchain::run(&root),
         Some("xwork") => run_xwork(&root),
         Some("verify-signed") => release::run_verify_signed(&rest),
@@ -167,7 +204,7 @@ fn main() -> ExitCode {
         Some("package") => release::run_package(&root),
         _ => {
             eprintln!(
-                "usage: cargo xtask <spec-check|toolchain-check|xwork|verify-signed|image-tags|package>"
+                "usage: cargo xtask <spec-check|projectfile-check|toolchain-check|xwork|verify-signed|image-tags|package>"
             );
             ExitCode::from(2)
         }

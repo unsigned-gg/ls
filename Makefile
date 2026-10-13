@@ -1,129 +1,69 @@
 # Makefile for ls (LeanSpec Parser & CAS Listing Engine)
-# Standard POSIX wrapper that awk-parses recipes directly from Justfile.
+# Standard POSIX wrapper that delegates directly to `cargo xtask` and `cargo -j $(JOBS)`.
 SHELL := bash
 .SHELLFLAGS := -euo pipefail -c
 .DEFAULT_GOAL := help
-.ONESHELL:
 
 JOBS ?= 2
-
 export JOBS
 
-JUST := $(shell command -v just 2>/dev/null)
-
-# Discover available recipe names from Justfile (excluding help, default)
-TARGETS := $(shell awk '(/^[a-zA-Z0-9_-]+ *:[^=]/ || /^[a-zA-Z0-9_-]+ *:$$/) && !/^[a-zA-Z0-9_-]+ *:=/ { split($$1, a, ":"); t = a[1]; if (t != "help" && t != "default") print t }' Justfile 2>/dev/null)
-
-.PHONY: $(TARGETS) help default
-
-define AWK_PARSER
-BEGIN {
-    vars["jobs"] = jobs
-}
-# Capture variable definitions: var := "val"
-/^[a-zA-Z0-9_-]+ *:=/ {
-    var = $$1
-    val = $$0
-    sub(/^[a-zA-Z0-9_-]+ *:= *"/, "", val)
-    sub(/".*$$/, "", val)
-    if (!(var in vars)) vars[var] = val
-    next
-}
-# Capture doc comment above recipe
-/^# / {
-    sub(/^# */, "")
-    last_doc = $$0
-    next
-}
-# Capture recipe signature
-(/^[a-zA-Z0-9_-]+ *:[^=]/ || /^[a-zA-Z0-9_-]+ *:$$/) && !/^[a-zA-Z0-9_-]+ *:=/ {
-    curr = $$1
-    sub(/:.*/, "", curr)
-    header = $$0
-    sub(/^[a-zA-Z0-9_-]+ *: */, "", header)
-    deps[curr] = header
-    all_targets[curr] = 1
-    doc[curr] = last_doc
-    order[++target_count] = curr
-    last_doc = ""
-    next
-}
-# Capture recipe body lines and interpolate variables
-/^[ \t]+/ && curr != "" {
-    line = $$0
-    sub(/^[ \t]+/, "", line)
-    for (v in vars) {
-        gsub("\\{\\{ *" v " *\\}\\}", vars[v], line)
-    }
-    gsub(/[$$][$$]/, "$$", line)
-    body[curr] = (body[curr] ? body[curr] "\n" : "") line
-    next
-}
-!/^[ \t]/ {
-    curr = ""
-    last_doc = ""
-}
-function emit(t,    n, d, i, k, lines, cmd) {
-    if (!(t in all_targets)) {
-        print "echo \"error: unknown recipe: " t "\" >&2; exit 1"
-        return
-    }
-    if (deps[t] != "") {
-        n = split(deps[t], d, " ")
-        for (i = 1; i <= n; i++) {
-            if (d[i] != "") emit(d[i])
-        }
-    }
-    if (body[t] != "") {
-        k = split(body[t], lines, "\n")
-        for (i = 1; i <= k; i++) {
-            cmd = lines[i]
-            sub(/^@/, "", cmd)
-            print cmd
-        }
-    }
-}
-function show_help() {
-    print "Usage: make <target>"
-    print ""
-    print "Available recipes (parsed from Justfile):"
-    for (i = 1; i <= target_count; i++) {
-        t = order[i]
-        if (t != "default" && t != "help") {
-            printf "  \033[36m%-24s\033[0m %s\n", t, (doc[t] ? doc[t] : "")
-        }
-    }
-}
-END {
-    if (target == "help" || target == "default" || target == "") {
-        show_help()
-    } else {
-        print "set -euo pipefail"
-        emit(target)
-    }
-}
-endef
-export AWK_PARSER
-
-help:
-	@if [ -n "$(JUST)" ]; then \
-		$(JUST) --list; \
-	else \
-		awk -v target="help" -v jobs="$(JOBS)" "$$AWK_PARSER" Justfile; \
-	fi
+.PHONY: help default build fmt fmt-check clippy test doc-test check ci spec-check projectfile-check toolchain-check xwork deny audit smoke doc
 
 default: help
 
-$(TARGETS):
-	@if [ -n "$(JUST)" ]; then \
-		$(JUST) --set jobs "$(JOBS)" "$@"; \
-	else \
-		awk -v target="$@" -v jobs="$(JOBS)" "$$AWK_PARSER" Justfile | $(SHELL); \
-	fi
+help: ## Show available targets
+	@echo "Usage: make <target> [JOBS=2]"
+	@echo ""
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-22s\033[0m %s\n", $$1, $$2}'
 
-%:
-	@if [ -n "$(JUST)" ]; then \
-		$(JUST) --set jobs "$(JOBS)" "$*"; \
-	else \
-		awk -v target="$*" -v jobs="$(JOBS)" "$$AWK_PARSER" Justfile | $(SHELL); \
-	fi
+build: ## Compile the workspace with locked dependencies and host throttling
+	cargo build --workspace -j $(JOBS)
+
+fmt: ## Format all Rust code
+	cargo fmt --all
+
+fmt-check: ## Check code formatting without modifying files
+	cargo fmt --all -- --check
+
+clippy: ## Lint with clippy (warnings denied)
+	cargo clippy --workspace --all-targets -j $(JOBS) -- -D warnings
+
+test: ## Run unit and integration tests with bounded threads
+	cargo test --workspace -j $(JOBS)
+
+doc-test: ## Run documentation tests
+	cargo test --doc --workspace -j $(JOBS)
+
+check: fmt-check clippy test doc-test ## Push gate: fmt-check, clippy, test, doc-test
+
+ci: check ## Alias for check
+
+spec-check: ## Validate repository specifications with lsc
+	cargo xtask spec-check
+
+projectfile-check: ## Validate projectfile.yaml with lsc
+	cargo xtask projectfile-check
+
+toolchain-check: ## Verify active Rust matches rust-toolchain.toml
+	cargo xtask toolchain-check
+
+xwork: ## Full verification pipeline via cargo xtask
+	cargo xtask xwork
+
+deny: ## Audit licenses, bans, and advisories
+	cargo deny check
+
+audit: ## Check dependencies for known advisories
+	cargo audit
+
+smoke: ## Build CLI/library and verify domain crate has zero I/O
+	cargo build --workspace -j $(JOBS)
+	@if grep -rnE 'std::net|std::fs|tokio|std::process' crates/ls-domain/src; then \
+		echo "smoke: ls-domain must not use I/O" >&2; \
+		exit 1; \
+	fi; \
+	echo "smoke: ok"
+
+doc: ## Build API docs
+	cargo doc --workspace --no-deps -j $(JOBS)

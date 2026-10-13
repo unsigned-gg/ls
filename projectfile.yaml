@@ -1,0 +1,81 @@
+$schema: https://projectfile.org/schema/v1.json
+kind: SoftwareSourceCode
+
+identity:
+  namespace: gg.unsigned
+  name: ls
+  version: "0.1.0"
+  title:
+    en: "ls"
+  summary:
+    en: "LeanSpec parser, validator, and CAS-aware Projectfile v1 normative engine."
+  created: "2026-10-01"
+  modified: "2026-10-13"
+
+repositories:
+  - url: "https://github.com/unsigned-gg/ls.git"
+    type: git
+    branch: main
+    role: origin
+
+links:
+  - type: source-code
+    url: https://github.com/unsigned-gg/ls
+  - type: bugs
+    url: https://github.com/unsigned-gg/ls/issues
+
+license:
+  spdx: Apache-2.0 OR MIT
+  file: LICENSE-APACHE
+
+copyright:
+  year: 2026
+
+people:
+  - family-names: Todie
+    given-names: Christian M.
+    email: chris@todie.io
+    roles: [founder, author, maintainer, copyright]
+
+organizations:
+  - name: "Unsigned"
+    url: https://github.com/unsigned-gg
+    roles: [funder, copyright]
+
+keywords:
+  - leanspec
+  - projectfile
+  - cas
+  - ears
+  - rust
+
+technologies:
+  - rust
+  - serde
+  - clap
+  - blake3
+
+requirements:
+  runtime:
+    rust: ">=1.85"
+
+org:
+  projectfile:
+    operating-system: [ linux ]
+    architecture: [ amd64 ]
+    ci:
+      nodes:
+        hygiene:
+          needs:
+            toolchain-check: true
+            spec-check: true
+            projectfile-check: true
+            zero-io-domain: true
+        check:
+          goal: true
+          needs:
+            hygiene: true
+            cargo-fmt: true
+            cargo-clippy: true
+            cargo-test: true
+            cargo-doc-test: true

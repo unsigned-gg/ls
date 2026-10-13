@@ -289,7 +289,12 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     };
-                    let res = ls::CiResolver::resolve_fixture(&val);
+                    let ci_doc = val
+                        .get("org")
+                        .and_then(|o| o.get("projectfile"))
+                        .and_then(|p| p.get("ci"))
+                        .unwrap_or(&val);
+                    let res = ls::CiResolver::resolve_fixture(ci_doc);
                     let json = match serde_json::to_string_pretty(&res) {
                         Ok(j) => j,
                         Err(err) => {
@@ -298,7 +303,11 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         }
                     };
                     println!("{json}");
-                    ExitCode::SUCCESS
+                    if res.reject.is_some() {
+                        ExitCode::FAILURE
+                    } else {
+                        ExitCode::SUCCESS
+                    }
                 }
                 "generate" => {
                     let Some(file_path) = args.get(2) else {
