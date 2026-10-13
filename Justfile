@@ -48,6 +48,17 @@ ci:
     cargo test --workspace -j {{jobs}}
     cargo test --doc --workspace -j {{jobs}}
 
+# Validate this repository's own specifications with lsc
+spec-check:
+    cargo xtask spec-check
+
+# Verify the active Rust matches rust-toolchain.toml
+toolchain-check:
+    cargo xtask toolchain-check
+
+# The integration cycle CI runs: toolchain, specs, then the push gate
+xwork: toolchain-check spec-check check
+
 # Audit licenses, bans, and advisories
 deny:
     cargo deny check

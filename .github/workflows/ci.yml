@@ -92,3 +92,17 @@ jobs:
         uses: taiki-e/install-action@cargo-deny
       - name: cargo deny check
         run: cargo deny check
+
+  xwork:
+    name: xwork
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: xwork
+      - uses: taiki-e/install-action@just
+      - name: just xwork
+        run: just xwork
