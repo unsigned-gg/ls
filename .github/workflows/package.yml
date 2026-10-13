@@ -1,0 +1,144 @@
+name: Package
+
+# GitHub flow: every PR builds and smoke-tests the image and checks commit signatures.
+# A merge to main (or a v* tag) pushes it to GitHub Packages and signs it with cosign
+# (keyless, GitHub OIDC), then verifies the signature it just made.
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: "10"
+  CARGO_INCREMENTAL: "0"
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: "true"
+  IMAGE: ghcr.io/unsigned-gg/ls
+
+jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      image: ${{ steps.decide.outputs.image }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            image:
+              - 'crates/**'
+              - 'Cargo.toml'
+              - 'rust-toolchain.toml'
+              - '.cargo/**'
+              - 'Dockerfile'
+              - '.dockerignore'
+              - '.github/workflows/package.yml'
+      # Manual runs and version tags always build; a tag must publish whatever changed.
+      - name: decide
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ] || [ "${{ startsWith(github.ref, 'refs/tags/') }}" = true ]; then
+            echo "image=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "image=${{ steps.filter.outputs.image }}" >> "$GITHUB_OUTPUT"
+          fi
+
+  signed-commits:
+    name: signed commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: cargo xtask verify-signed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask verify-signed "${{ github.repository }}" "${{ github.event.pull_request.number }}"
+
+  image:
+    name: image
+    needs: changes
+    if: needs.changes.outputs.image == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - uses: mozilla-actions/sccache-action@v0.0.9
+      - name: cargo xtask package
+        run: cargo xtask package
+      - uses: docker/setup-buildx-action@v3
+      - name: Tags (push events only)
+        id: tags
+        if: github.event_name == 'push'
+        run: |
+          {
+            echo 'list<<EOF'
+            cargo xtask image-tags "${{ github.ref }}" "${{ github.sha }}" | sed "s|^|$IMAGE:|"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+      - name: Build and smoke test (pull requests)
+        if: github.event_name != 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: ls:ci
+      - name: Run the built image
+        if: github.event_name != 'push'
+        run: docker run --rm ls:ci --version
+      - name: Log in to GitHub Packages
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build and push
+        id: push
+        if: github.event_name == 'push'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.tags.outputs.list }}
+          provenance: mode=max
+      - uses: sigstore/cosign-installer@v3
+        if: github.event_name == 'push'
+      - name: Sign the pushed digest
+        if: github.event_name == 'push'
+        run: cosign sign --yes "$IMAGE@${{ steps.push.outputs.digest }}"
+      - name: Verify the signature
+        if: github.event_name == 'push'
+        run: |
+          cosign verify "$IMAGE@${{ steps.push.outputs.digest }}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github\.com/unsigned-gg/ls/\.github/workflows/package\.yml@'

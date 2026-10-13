@@ -17,10 +17,59 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
   CARGO_NET_RETRY: "10"
+  RUSTC_WRAPPER: sccache
+  SCCACHE_GHA_ENABLED: "true"
 
 jobs:
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      rust: ${{ steps.decide.outputs.rust }}
+      deps: ${{ steps.decide.outputs.deps }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - 'crates/**'
+              - 'specs/**'
+              - 'Cargo.toml'
+              - 'rust-toolchain.toml'
+              - 'clippy.toml'
+              - 'rustfmt.toml'
+              - 'deny.toml'
+              - '.cargo/**'
+              - 'Justfile'
+              - 'Makefile'
+              - '.github/workflows/ci.yml'
+            deps:
+              - 'crates/*/Cargo.toml'
+              - 'Cargo.toml'
+              - 'deny.toml'
+              - '.github/workflows/ci.yml'
+      # A manual run has no base to diff against, so it runs everything.
+      - name: decide
+        id: decide
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            echo "rust=true" >> "$GITHUB_OUTPUT"
+            echo "deps=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "rust=${{ steps.filter.outputs.rust }}" >> "$GITHUB_OUTPUT"
+            echo "deps=${{ steps.filter.outputs.deps }}" >> "$GITHUB_OUTPUT"
+          fi
+
   fmt:
     name: fmt
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -33,6 +82,8 @@ jobs:
 
   clippy:
     name: clippy
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -40,50 +91,53 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: clippy
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -j 2 -- -D warnings
 
   check:
     name: check
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: check
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - name: cargo check
         run: cargo check --workspace --all-targets -j 2
 
   test:
     name: test
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: test
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - name: cargo test
         run: cargo test --workspace -j 2
 
   smoke:
     name: zero-io smoke
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - name: smoke test
         run: make smoke
 
   audit:
     name: audit
+    needs: changes
+    if: needs.changes.outputs.deps == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -95,14 +149,14 @@ jobs:
 
   xwork:
     name: xwork
+    needs: changes
+    if: needs.changes.outputs.rust == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: xwork
+      - uses: mozilla-actions/sccache-action@v0.0.9
       - uses: taiki-e/install-action@just
       - name: just xwork
         run: just xwork
