@@ -1,0 +1,32 @@
+# release-plz: a release PR bumps the workspace version and writes CHANGELOG.md from
+# conventional commits. Merging it tags vX.Y.Z and creates the GitHub release, and the
+# tag push runs package.yml, which publishes and signs the image.
+# Nothing is published to crates.io (publish = false), so versions come from git tags.
+
+[workspace]
+git_only = true
+# One version, one tag, one changelog for the whole workspace.
+git_tag_enable = false
+git_release_enable = false
+# Every crate shares the workspace version, so every crate finds its previous release at
+# the same vX.Y.Z tag. Without this, release-plz sees no tag for ls-domain and xtask,
+# treats them as initial releases and skips their semver check.
+git_tag_name = "v{{ version }}"
+changelog_update = false
+pr_labels = ["release"]
+
+[[package]]
+name = "ls"
+git_tag_enable = true
+git_release_enable = true
+changelog_update = true
+changelog_path = "./CHANGELOG.md"
+changelog_include = ["ls-domain"]
+
+# Repo automation, not shipped. It did not exist at the v0.1.0 baseline tag, and release-plz
+# fails when a package has a baseline tag but is missing from that revision. A tag pattern
+# that matches nothing makes it an initial release with no baseline to compare.
+[[package]]
+name = "xtask"
+release = false
+git_tag_name = "xtask-v{{ version }}"

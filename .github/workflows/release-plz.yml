@@ -1,0 +1,95 @@
+name: Release-plz
+
+# Opens or updates the release PR on every push to main, and tags + releases when a
+# release PR merges. Both steps need a GitHub App token: events made with the default
+# GITHUB_TOKEN do not start other workflows, so the release PR would get no CI and the
+# tag would not start package.yml. Without the secrets the jobs log a notice and pass.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-plz
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check for app credentials
+        id: creds
+        env:
+          APP_ID: ${{ secrets.RELEASE_PLZ_APP_ID }}
+        run: |
+          if [ -n "$APP_ID" ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::RELEASE_PLZ_APP_ID is not set; release-plz is idle."; echo "present=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.creds.outputs.present == 'true'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.creds.outputs.present == 'true'
+      - uses: actions/create-github-app-token@v2
+        if: steps.creds.outputs.present == 'true'
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
+      - uses: release-plz/action@v0.5
+        if: steps.creds.outputs.present == 'true'
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          # rust-toolchain.toml pins 1.85.0, and cargo-semver-checks needs rustc 1.93 or newer.
+          RUSTUP_TOOLCHAIN: stable
+
+  release-pr:
+    name: release-pr
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-plz-pr
+      cancel-in-progress: false
+    steps:
+      - name: Check for app credentials
+        id: creds
+        env:
+          APP_ID: ${{ secrets.RELEASE_PLZ_APP_ID }}
+        run: |
+          if [ -n "$APP_ID" ]; then echo "present=true" >> "$GITHUB_OUTPUT"
+          else echo "::notice::RELEASE_PLZ_APP_ID is not set; release-plz is idle."; echo "present=false" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.creds.outputs.present == 'true'
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.creds.outputs.present == 'true'
+      - uses: actions/create-github-app-token@v2
+        if: steps.creds.outputs.present == 'true'
+        id: token
+        with:
+          app-id: ${{ secrets.RELEASE_PLZ_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLZ_APP_PRIVATE_KEY }}
+      - uses: release-plz/action@v0.5
+        if: steps.creds.outputs.present == 'true'
+        with:
+          command: release-pr
+        env:
+          GITHUB_TOKEN: ${{ steps.token.outputs.token }}
+          # rust-toolchain.toml pins 1.85.0, and cargo-semver-checks needs rustc 1.93 or newer.
+          RUSTUP_TOOLCHAIN: stable
