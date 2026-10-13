@@ -169,7 +169,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
       - uses: mozilla-actions/sccache-action@v0.0.9
-      - uses: taiki-e/install-action@just
-      - name: just xwork
-        run: just xwork
+      - name: cargo xtask xwork
+        run: cargo xtask xwork

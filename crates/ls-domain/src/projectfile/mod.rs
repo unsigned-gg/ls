@@ -12,6 +12,7 @@ pub mod ci;
 pub mod image;
 pub mod interp;
 pub mod just_target;
+pub mod xtask_target;
 
 pub use ci::{
     compute_matrix_cells, normalize_needs, CiMatrixDef, CiNeedOption, CiNode, CiResolveResult,
@@ -22,3 +23,4 @@ pub use interp::{
     find_references, find_spans, ProjectfileInterpolator, ReferenceSpan, TemplateSpan,
 };
 pub use just_target::{JustTargetOptions, JustfileCompiler};
+pub use xtask_target::{XtaskCompiler, XtaskTargetOptions};

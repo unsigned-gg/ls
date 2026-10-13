@@ -25,7 +25,9 @@ fn print_usage() {
     println!("    lsc theorems [PATH]    List formal theorem statements & verification status");
     println!("    lsc pf interp <FILE>   Interpolate projectfile expressions (§3.8)");
     println!("    lsc pf ci resolve <F>  Resolve org.projectfile.ci intent DAG");
-    println!("    lsc pf ci generate <F> Lower DAG to Justfile (--target just)");
+    println!(
+        "    lsc pf ci generate <F> Lower DAG to Rust xtask or Justfile (--target xtask|just)"
+    );
     println!("    lsc pf image tags <F>  Derive org.projectfile.image variant tags");
     println!("    lsc --version, -v      Print version information");
     println!("    lsc --help, -h         Print this help message");
@@ -222,7 +224,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
         println!("USAGE:");
         println!("    lsc pf interp <FILE> [--expr <EXPR>]    Interpolate projectfile (§3.8)");
         println!("    lsc pf ci resolve <FILE>                Resolve org.projectfile.ci DAG");
-        println!("    lsc pf ci generate <FILE> [--target just] Lower DAG to Justfile");
+        println!("    lsc pf ci generate <FILE> [--target xtask|just] Lower DAG to Rust xtask or Justfile");
         println!("    lsc pf image tags <FILE>                Derive org.projectfile.image tags");
         return ExitCode::SUCCESS;
     }
@@ -303,6 +305,22 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         eprintln!("lsc pf ci generate: requires a file path argument");
                         return ExitCode::FAILURE;
                     };
+                    let mut target = "xtask";
+                    let mut idx = 3;
+                    while idx < args.len() {
+                        if args[idx] == "--target" {
+                            if let Some(val) = args.get(idx + 1) {
+                                target = val.as_str();
+                                idx += 2;
+                                continue;
+                            }
+                            eprintln!("lsc pf ci generate: --target requires a value (xtask|just)");
+                            return ExitCode::FAILURE;
+                        } else if let Some(val) = args[idx].strip_prefix("--target=") {
+                            target = val;
+                        }
+                        idx += 1;
+                    }
                     let content = match fs::read_to_string(file_path) {
                         Ok(c) => c,
                         Err(err) => {
@@ -319,15 +337,37 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     };
-                    let res = ls::CiResolver::resolve_fixture(&val);
+                    let ci_doc = val
+                        .get("org")
+                        .and_then(|o| o.get("projectfile"))
+                        .and_then(|p| p.get("ci"))
+                        .unwrap_or(&val);
+                    let res = ls::CiResolver::resolve_fixture(ci_doc);
                     if let Some(ref reject) = res.reject {
                         eprintln!("lsc pf ci generate: DAG rejected with code: '{reject}'");
                         return ExitCode::FAILURE;
                     }
-                    let options = ls::JustTargetOptions::default();
-                    let out = ls::JustfileCompiler::compile_from_doc(&val, &res, &options);
-                    print!("{out}");
-                    ExitCode::SUCCESS
+                    match target {
+                        "xtask" | "rust" => {
+                            let options = ls::XtaskTargetOptions::default();
+                            let out = ls::XtaskCompiler::compile_from_doc(&val, &res, &options);
+                            print!("{out}");
+                            ExitCode::SUCCESS
+                        }
+                        "just" | "justfile" => {
+                            let options = ls::JustTargetOptions::default();
+                            let out =
+                                ls::JustfileCompiler::compile_from_doc(ci_doc, &res, &options);
+                            print!("{out}");
+                            ExitCode::SUCCESS
+                        }
+                        other => {
+                            eprintln!(
+                                "lsc pf ci generate: unsupported --target '{other}' (expected 'xtask' or 'just')"
+                            );
+                            ExitCode::FAILURE
+                        }
+                    }
                 }
                 unknown => {
                     eprintln!("lsc pf ci: unrecognized subcommand '{unknown}'");
