@@ -195,11 +195,7 @@ fn run_stage(root: &Path, stage: &str, _args: &[&str]) -> ExitCode {
 
 fn run_xwork(root: &Path) -> ExitCode {
     println!("=== xwork: verification pipeline in projectfile.yaml order ===");
-    let code = stages::run_xwork(root, run_stage);
-    if code == ExitCode::SUCCESS {
-        println!("=== xwork: all stages PASSED ===");
-    }
-    code
+    stages::run_xwork(root, run_stage)
 }
 
 /// What `lsc` generates from `projectfile.yaml`, or `None` after printing why it could not.
@@ -300,6 +296,38 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn stage_names(stages: &[(&str, &[&str])]) -> Vec<String> {
+        stages.iter().map(|(stage, _)| (*stage).to_string()).collect()
+    }
+
+    // SPEC-0003 requirement 9: the dispatch runner stops at the first failing stage.
+    #[test]
+    fn run_xwork_stops_at_the_first_failing_stage() {
+        let mut calls = Vec::new();
+        let code = stages::run_xwork(Path::new("."), |_, stage, _| {
+            calls.push(stage.to_string());
+            if calls.len() == 2 {
+                ExitCode::FAILURE
+            } else {
+                ExitCode::SUCCESS
+            }
+        });
+        assert_eq!(code, ExitCode::FAILURE);
+        assert_eq!(calls, stage_names(&stages::XWORK_STAGES[..2]));
+    }
+
+    // SPEC-0003 requirement 9: on success every stage runs once, in table order.
+    #[test]
+    fn run_xwork_runs_every_stage_in_table_order() {
+        let mut calls = Vec::new();
+        let code = stages::run_xwork(Path::new("."), |_, stage, _| {
+            calls.push(stage.to_string());
+            ExitCode::SUCCESS
+        });
+        assert_eq!(code, ExitCode::SUCCESS);
+        assert_eq!(calls, stage_names(stages::XWORK_STAGES));
+    }
 
     #[test]
     fn every_projectfile_stage_has_an_implementation() {
