@@ -203,7 +203,10 @@ impl XtaskCompiler {
             out.push_str(
                 &DISPATCH_RUNNER
                     .replace("@TARGET_DOC@", &target_doc)
-                    .replace("@TARGET@", &target_doc.replace('{', "{{").replace('}', "}}"))
+                    .replace(
+                        "@TARGET@",
+                        &target_doc.replace('{', "{{").replace('}', "}}"),
+                    )
                     .replace("@IDENT@", &fn_ident)
                     .replace("@TABLE@", &table),
             );
@@ -263,22 +266,36 @@ impl XtaskCompiler {
     /// The rows of `gg.unsigned.ls.tools` in name order (SPEC-0003 requirement 14).
     /// A row without a string `crate`, `version` and `bin` is left out.
     fn tools_from_doc(doc: &Value) -> Vec<(String, String, String)> {
-        let Some(tools) = doc
-            .get("gg")
+        Self::tool_rows(doc).filter_map(|(_, row)| row).collect()
+    }
+
+    /// The names of `gg.unsigned.ls.tools` rows that lack a string `crate`, `version`
+    /// or `bin`, in name order (SPEC-0003 requirement 14). `lsc` rejects the document
+    /// with `incomplete-tool` when any are found.
+    #[must_use]
+    pub fn incomplete_tools(doc: &Value) -> Vec<String> {
+        Self::tool_rows(doc)
+            .filter(|(_, row)| row.is_none())
+            .map(|(name, _)| name.to_string())
+            .collect()
+    }
+
+    /// Each `gg.unsigned.ls.tools` row by name, with its `(crate, version, bin)` when complete.
+    fn tool_rows(doc: &Value) -> impl Iterator<Item = (&str, Option<(String, String, String)>)> {
+        doc.get("gg")
             .and_then(|g| g.get("unsigned"))
             .and_then(|u| u.get("ls"))
             .and_then(|l| l.get("tools"))
             .and_then(Value::as_object)
-        else {
-            return Vec::new();
-        };
-        tools
-            .values()
-            .filter_map(|row| {
-                let field = |key: &str| row.get(key).and_then(Value::as_str).map(str::to_string);
-                Some((field("crate")?, field("version")?, field("bin")?))
-            })
-            .collect()
+            .into_iter()
+            .flatten()
+            .map(|(name, row)| (name.as_str(), Self::tool_row(row)))
+    }
+
+    /// One tool row as `(crate, version, bin)`, or `None` if a field is missing.
+    fn tool_row(row: &Value) -> Option<(String, String, String)> {
+        let field = |key: &str| row.get(key).and_then(Value::as_str).map(str::to_string);
+        Some((field("crate")?, field("version")?, field("bin")?))
     }
 
     fn split_args(raw: Option<&str>) -> Vec<String> {
@@ -500,6 +517,21 @@ mod tests {
         assert!(digit.contains("pub fn run_2fa<F>("));
         let upper = named("Install");
         assert!(upper.contains("pub fn run_install<F>("), "{upper}");
+    }
+
+    // SPEC-0003 requirement 14: a tool row without crate, version or bin is named, so
+    // lsc can reject it instead of dropping the pin.
+    #[test]
+    fn incomplete_tool_rows_are_named() {
+        let doc = json!({
+            "gg": { "unsigned": { "ls": { "tools": {
+                "deny": { "crate": "cargo-deny", "version": "0.19.9", "bin": "cargo-deny" },
+                "typo": { "crate": "cargo-nextest", "vesion": "0.9.104", "bin": "cargo-nextest" },
+                "bare": "cargo-audit"
+            } } } }
+        });
+        assert_eq!(XtaskCompiler::incomplete_tools(&doc), vec!["bare", "typo"]);
+        assert!(XtaskCompiler::incomplete_tools(&sample_doc()).is_empty());
     }
 
     // SPEC-0003 requirement 13: spawn mode drops the cargo run package variables.

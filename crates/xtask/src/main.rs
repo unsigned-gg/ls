@@ -298,7 +298,10 @@ mod tests {
     use super::*;
 
     fn stage_names(stages: &[(&str, &[&str])]) -> Vec<String> {
-        stages.iter().map(|(stage, _)| (*stage).to_string()).collect()
+        stages
+            .iter()
+            .map(|(stage, _)| (*stage).to_string())
+            .collect()
     }
 
     // SPEC-0003 requirement 9: the dispatch runner stops at the first failing stage.

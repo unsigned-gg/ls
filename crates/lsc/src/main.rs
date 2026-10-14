@@ -382,6 +382,15 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         eprintln!("lsc pf ci generate: --goal only applies to --target xtask");
                         return ExitCode::FAILURE;
                     }
+                    // SPEC-0003 requirement 14: a tool pin with a missing field is an error.
+                    let incomplete = lsc::XtaskCompiler::incomplete_tools(&val);
+                    if !incomplete.is_empty() {
+                        eprintln!(
+                            "lsc pf ci generate: DAG rejected with code: 'incomplete-tool' (gg.unsigned.ls.tools: {}; each row needs string crate, version and bin)",
+                            incomplete.join(", ")
+                        );
+                        return ExitCode::FAILURE;
+                    }
                     match target {
                         "xtask" | "rust" => {
                             let defaults = lsc::XtaskTargetOptions::default();
