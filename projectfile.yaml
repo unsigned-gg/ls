@@ -13,16 +13,16 @@ identity:
   modified: "2026-10-13"
 
 repositories:
-  - url: "https://github.com/unsigned-gg/ls.git"
+  - url: "https://github.com/unsigned-gg/lsc.git"
     type: git
     branch: main
     role: origin
 
 links:
   - type: source-code
-    url: https://github.com/unsigned-gg/ls
+    url: https://github.com/unsigned-gg/lsc
   - type: bugs
-    url: https://github.com/unsigned-gg/ls/issues
+    url: https://github.com/unsigned-gg/lsc/issues
 
 license:
   spdx: Apache-2.0 OR MIT
