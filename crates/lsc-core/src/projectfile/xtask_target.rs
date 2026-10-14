@@ -239,27 +239,16 @@ impl XtaskCompiler {
     }
 
     /// Compiles a projectfile document AST and resolved DAG into a Rust `xtask` module.
+    ///
+    /// `resolved` is lowered as given. An empty closure (for example a `--goal` node
+    /// with no needs) gives an empty stage table, never the flagged goals of `doc`.
     #[must_use]
     pub fn compile_from_doc(
         doc: &Value,
         resolved: &CiResolveResult,
         options: &XtaskTargetOptions,
     ) -> String {
-        let ci_section = doc
-            .get("org")
-            .and_then(|o| o.get("projectfile"))
-            .and_then(|p| p.get("ci"))
-            .or_else(|| doc.get("input"))
-            .unwrap_or(doc);
-
         let tools = Self::tools_from_doc(doc);
-        if resolved.runs.is_empty() {
-            // If resolved came from a full projectfile document where nodes live under org.projectfile.ci
-            let re_resolved = super::ci::CiResolver::resolve_fixture(ci_section);
-            if !re_resolved.runs.is_empty() {
-                return Self::compile_with_tools(&re_resolved, options, &tools);
-            }
-        }
         Self::compile_with_tools(resolved, options, &tools)
     }
 
@@ -444,6 +433,32 @@ mod tests {
             default.contains("pub const XWORK_STAGES"),
             "default name changed"
         );
+    }
+
+    // SPEC-0003 requirement 11: a goal with an empty closure lowers to an empty table,
+    // never to the flagged goals of the same document.
+    #[test]
+    fn goal_with_an_empty_closure_emits_an_empty_table() {
+        let ci = json!({
+            "nodes": {
+                "noop": { "needs": {} },
+                "check": { "goal": true, "needs": { "cargo-test": true } }
+            }
+        });
+        let doc = json!({ "org": { "projectfile": { "ci": ci.clone() } } });
+        let resolved = super::super::ci::CiResolver::resolve_goal(&ci, "noop");
+        assert_eq!(resolved.reject, None);
+        assert!(resolved.runs.is_empty());
+        let opts = XtaskTargetOptions {
+            default_target: "noop".to_string(),
+            ..dispatch()
+        };
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &opts);
+        assert!(
+            code.contains("pub const NOOP_STAGES: &[(&str, &[&str])] = &[\n];"),
+            "the noop table is not empty:\n{code}"
+        );
+        assert!(!code.contains("cargo-test"), "the flagged goal leaked in");
     }
 
     // SPEC-0003 requirement 13: spawn mode drops the cargo run package variables.
