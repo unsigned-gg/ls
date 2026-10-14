@@ -1,6 +1,6 @@
 # Cargo.toml for ls (LeanSpec Parser & CAS Listing Engine)
 # Host Throttling: Physical host ceres runs multiple active agent sessions.
-# All cargo invocations (in Makefiles, Justfiles, scripts, and interactive runs)
+# All cargo invocations (in the Makefile, `cargo xtask`, scripts, and interactive runs)
 # MUST specify -j 2 to prevent memory exhaustion and CPU starvation.
 
 [workspace]

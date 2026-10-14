@@ -58,7 +58,8 @@ lsc pf interp projectfile.yaml
 # Resolve org.projectfile.ci intent DAG and print execution plan
 lsc pf ci resolve projectfile.yaml
 
-# Lower CI intent DAG into a deterministic Justfile
+# Lower CI intent DAG into a Rust xtask (stdout) or a deterministic Justfile
+lsc pf ci generate projectfile.yaml --target xtask
 lsc pf ci generate projectfile.yaml --target just
 
 # Derive container image variant tags from org.projectfile.image
@@ -70,6 +71,7 @@ All builds must specify `-j 2` to prevent memory exhaustion on shared hosts:
 ```bash
 cargo check -j 2
 cargo test -j 2
+cargo xtask xwork   # full gate: toolchain, specs, projectfile, zero-I/O, fmt, clippy, test, doc-test
 make check
 make smoke
 ```
