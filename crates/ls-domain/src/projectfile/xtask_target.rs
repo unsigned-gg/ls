@@ -43,6 +43,72 @@ impl Default for XtaskTargetOptions {
     }
 }
 
+/// The dispatch-mode runner (SPEC-0003 requirements 9, 10). `@TARGET@`, `@IDENT@` and
+/// `@TABLE@` are replaced with the goal, its identifier and the stage table name.
+const DISPATCH_RUNNER: &str = r#"/// Execute the `@TARGET@` verification pipeline in topological DAG order.
+///
+/// `run_stage` runs one stage and returns its exit code. The first stage
+/// that does not succeed stops the pipeline. Then one summary line follows
+/// for each stage, and one verdict line.
+pub fn run_@IDENT@<F>(root: &Path, mut run_stage: F) -> ExitCode
+where
+    F: FnMut(&Path, &str, &[&str]) -> ExitCode,
+{
+    let width = @TABLE@
+        .iter()
+        .map(|(stage, _)| stage.len())
+        .max()
+        .unwrap_or(0);
+    let mut lines = Vec::with_capacity(@TABLE@.len());
+    let mut failed = None;
+    for &(stage, args) in @TABLE@ {
+        if failed.is_some() {
+            lines.push(format!("@TARGET@: not run {stage}"));
+            continue;
+        }
+        println!("xtask: [{stage}] running...");
+        let start = Instant::now();
+        let ok = run_stage(root, stage, args) == ExitCode::SUCCESS;
+        let secs = start.elapsed().as_secs_f64();
+        if ok {
+            lines.push(format!("@TARGET@: ok      {stage:<width$}  {secs:.1}s"));
+        } else {
+            eprintln!("xtask: [{stage}] FAILED");
+            lines.push(format!("@TARGET@: FAILED  {stage:<width$}  {secs:.1}s"));
+            failed = Some(stage);
+        }
+    }
+    for line in &lines {
+        println!("{line}");
+    }
+    match failed {
+        Some(stage) => {
+            println!("@TARGET@: FAILED at {stage}");
+            ExitCode::FAILURE
+        }
+        None => {
+            println!("@TARGET@: ok ({} stages)", @TABLE@.len());
+            ExitCode::SUCCESS
+        }
+    }
+}
+"#;
+
+/// Spawn mode: drop the variables `cargo run` sets for the xtask package, so a
+/// stage does not take itself for that package (SPEC-0003 requirement 13).
+const SPAWN_ENV_SCRUB: &str = r#"        for (key, _) in env::vars_os() {
+            let Some(key) = key.to_str() else {
+                continue;
+            };
+            if key.starts_with("CARGO_PKG_")
+                || key == "CARGO_MANIFEST_DIR"
+                || key == "CARGO_MANIFEST_PATH"
+            {
+                command.env_remove(key);
+            }
+        }
+"#;
+
 /// Zero-I/O Rust `xtask` Lowering Compiler.
 pub struct XtaskCompiler;
 
@@ -50,7 +116,17 @@ impl XtaskCompiler {
     /// Compiles a resolved CI execution plan into a deterministic Rust `xtask` module.
     #[must_use]
     pub fn compile(resolved: &CiResolveResult, options: &XtaskTargetOptions) -> String {
+        Self::compile_with_tools(resolved, options, &[])
+    }
+
+    fn compile_with_tools(
+        resolved: &CiResolveResult,
+        options: &XtaskTargetOptions,
+        tools: &[(String, String, String)],
+    ) -> String {
         let mut out = String::new();
+        let fn_ident = Self::sanitize_ident(&options.default_target);
+        let table = format!("{}_STAGES", fn_ident.to_ascii_uppercase());
 
         if options.emit_preamble {
             out.push_str("// SPDX-License-Identifier: Apache-2.0 OR MIT\n");
@@ -62,7 +138,8 @@ impl XtaskCompiler {
 
         if options.dispatch {
             out.push_str("use std::path::Path;\n");
-            out.push_str(concat!("use std::", "process::ExitCode;\n\n"));
+            out.push_str(concat!("use std::", "process::ExitCode;\n"));
+            out.push_str("use std::time::Instant;\n\n");
         } else {
             out.push_str("use std::env;\n");
             out.push_str("use std::path::Path;\n");
@@ -76,6 +153,17 @@ impl XtaskCompiler {
             "pub const DEFAULT_JOBS: usize = {};\n\n",
             options.default_jobs
         ));
+
+        if !tools.is_empty() {
+            out.push_str(
+                "/// Pinned tools from `gg.unsigned.ls.tools`: (crate, version, binary).\n",
+            );
+            out.push_str("pub const TOOLS: &[(&str, &str, &str)] = &[\n");
+            for (krate, version, bin) in tools {
+                out.push_str(&format!("    ({krate:?}, {version:?}, {bin:?}),\n"));
+            }
+            out.push_str("];\n\n");
+        }
 
         // Map prerequisites for each tool from before-pairs
         let mut tool_deps: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
@@ -91,7 +179,7 @@ impl XtaskCompiler {
 
         // Ordered stage table
         out.push_str("/// Topologically ordered CI stages lowered from `org.projectfile.ci`.\n");
-        out.push_str("pub const XWORK_STAGES: &[(&str, &[&str])] = &[\n");
+        out.push_str(&format!("pub const {table}: &[(&str, &[&str])] = &[\n"));
         for tool in &resolved.runs {
             let arg_list = Self::split_args(resolved.args.get(tool).map(String::as_str));
             let formatted_args: Vec<String> = arg_list.iter().map(|a| format!("{a:?}")).collect();
@@ -103,32 +191,13 @@ impl XtaskCompiler {
         out.push_str("];\n\n");
 
         // Runner function
-        let fn_ident = Self::sanitize_ident(&options.default_target);
         if options.dispatch {
-            out.push_str(&format!(
-                "/// Execute the `{}` verification pipeline in topological DAG order.\n",
-                options.default_target
-            ));
-            out.push_str("///\n");
             out.push_str(
-                "/// `run_stage` runs one stage and returns its exit code. The first stage\n",
+                &DISPATCH_RUNNER
+                    .replace("@TARGET@", &options.default_target)
+                    .replace("@IDENT@", &fn_ident)
+                    .replace("@TABLE@", &table),
             );
-            out.push_str("/// that does not succeed stops the pipeline.\n");
-            out.push_str(&format!(
-                "pub fn run_{fn_ident}<F>(root: &Path, mut run_stage: F) -> ExitCode\n"
-            ));
-            out.push_str("where\n");
-            out.push_str("    F: FnMut(&Path, &str, &[&str]) -> ExitCode,\n");
-            out.push_str("{\n");
-            out.push_str("    for &(stage, args) in XWORK_STAGES {\n");
-            out.push_str("        println!(\"xtask: [{stage}] running...\");\n");
-            out.push_str("        if run_stage(root, stage, args) != ExitCode::SUCCESS {\n");
-            out.push_str("            eprintln!(\"xtask: [{stage}] FAILED\");\n");
-            out.push_str("            return ExitCode::FAILURE;\n");
-            out.push_str("        }\n");
-            out.push_str("    }\n");
-            out.push_str("    ExitCode::SUCCESS\n");
-            out.push_str("}\n");
             return out;
         }
         out.push_str(&format!(
@@ -141,14 +210,16 @@ impl XtaskCompiler {
         out.push_str("    let jobs = env::var(\"JOBS\")\n");
         out.push_str("        .or_else(|_| env::var(\"CARGO_BUILD_JOBS\"))\n");
         out.push_str("        .unwrap_or_else(|_| DEFAULT_JOBS.to_string());\n\n");
-        out.push_str("    for &(tool, args) in XWORK_STAGES {\n");
+        out.push_str(&format!("    for &(tool, args) in {table} {{\n"));
         out.push_str("        println!(\"xtask: [{tool}] running...\");\n");
-        out.push_str("        let status = Command::new(tool)\n");
+        out.push_str("        let mut command = Command::new(tool);\n");
+        out.push_str("        command\n");
         out.push_str("            .args(args)\n");
         out.push_str("            .env(\"JOBS\", &jobs)\n");
         out.push_str("            .env(\"CARGO_BUILD_JOBS\", &jobs)\n");
-        out.push_str("            .current_dir(root)\n");
-        out.push_str("            .status();\n");
+        out.push_str("            .current_dir(root);\n");
+        out.push_str(SPAWN_ENV_SCRUB);
+        out.push_str("        let status = command.status();\n");
         out.push_str("        match status {\n");
         out.push_str("            Ok(s) if s.success() => {}\n");
         out.push_str("            Ok(_) => {\n");
@@ -181,14 +252,36 @@ impl XtaskCompiler {
             .or_else(|| doc.get("input"))
             .unwrap_or(doc);
 
+        let tools = Self::tools_from_doc(doc);
         if resolved.runs.is_empty() {
             // If resolved came from a full projectfile document where nodes live under org.projectfile.ci
             let re_resolved = super::ci::CiResolver::resolve_fixture(ci_section);
             if !re_resolved.runs.is_empty() {
-                return Self::compile(&re_resolved, options);
+                return Self::compile_with_tools(&re_resolved, options, &tools);
             }
         }
-        Self::compile(resolved, options)
+        Self::compile_with_tools(resolved, options, &tools)
+    }
+
+    /// The rows of `gg.unsigned.ls.tools` in name order (SPEC-0003 requirement 14).
+    /// A row without a string `crate`, `version` and `bin` is left out.
+    fn tools_from_doc(doc: &Value) -> Vec<(String, String, String)> {
+        let Some(tools) = doc
+            .get("gg")
+            .and_then(|g| g.get("unsigned"))
+            .and_then(|u| u.get("ls"))
+            .and_then(|l| l.get("tools"))
+            .and_then(Value::as_object)
+        else {
+            return Vec::new();
+        };
+        tools
+            .values()
+            .filter_map(|row| {
+                let field = |key: &str| row.get(key).and_then(Value::as_str).map(str::to_string);
+                Some((field("crate")?, field("version")?, field("bin")?))
+            })
+            .collect()
     }
 
     fn split_args(raw: Option<&str>) -> Vec<String> {
@@ -297,6 +390,113 @@ mod tests {
         assert!(
             spec < fmt,
             "hygiene stages must precede the goal's own tools"
+        );
+    }
+
+    fn dispatch() -> XtaskTargetOptions {
+        XtaskTargetOptions {
+            dispatch: true,
+            ..XtaskTargetOptions::default()
+        }
+    }
+
+    // SPEC-0003 requirement 10: dispatch mode prints one summary line per stage.
+    #[test]
+    fn dispatch_mode_prints_a_summary_line_for_each_stage() {
+        let doc = sample_doc();
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&doc);
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &dispatch());
+        for needle in [
+            "ok     ",
+            "FAILED ",
+            "not run",
+            "FAILED at",
+            "Instant::now()",
+        ] {
+            assert!(code.contains(needle), "dispatch output lacks `{needle}`");
+        }
+        assert!(
+            !code.contains("Command"),
+            "dispatch mode must not spawn a process"
+        );
+        assert!(
+            !code.contains("std::env"),
+            "dispatch mode must not read the environment"
+        );
+    }
+
+    // SPEC-0003 requirement 11: the table and the runner take the goal's name.
+    #[test]
+    fn stage_table_and_runner_take_the_goal_name() {
+        let doc = sample_doc();
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&doc);
+        let opts = XtaskTargetOptions {
+            default_target: "install".to_string(),
+            ..dispatch()
+        };
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &opts);
+        assert!(code.contains("pub const INSTALL_STAGES: &[(&str, &[&str])]"));
+        assert!(code.contains("pub fn run_install<F>("));
+        assert!(code.contains("in INSTALL_STAGES"));
+        assert!(!code.contains("XWORK_STAGES"));
+        let default = XtaskCompiler::compile_from_doc(&doc, &resolved, &dispatch());
+        assert!(
+            default.contains("pub const XWORK_STAGES"),
+            "default name changed"
+        );
+    }
+
+    // SPEC-0003 requirement 13: spawn mode drops the cargo run package variables.
+    #[test]
+    fn spawn_mode_removes_the_cargo_run_package_variables() {
+        let doc = sample_doc();
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&doc);
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &XtaskTargetOptions::default());
+        for needle in [
+            "env_remove",
+            "\"CARGO_PKG_\"",
+            "\"CARGO_MANIFEST_DIR\"",
+            "\"CARGO_MANIFEST_PATH\"",
+        ] {
+            assert!(code.contains(needle), "spawn output lacks `{needle}`");
+        }
+    }
+
+    // SPEC-0003 requirement 14: gg.unsigned.ls.tools becomes a TOOLS table in name order.
+    #[test]
+    fn tools_section_becomes_a_tools_table() {
+        let doc = json!({
+            "gg": { "unsigned": { "ls": { "tools": {
+                "nextest": { "crate": "cargo-nextest", "version": "0.9.104", "bin": "cargo-nextest" },
+                "deny": { "crate": "cargo-deny", "version": "0.19.9", "bin": "cargo-deny" }
+            } } } },
+            "org": { "projectfile": { "ci": sample_doc() } }
+        });
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&sample_doc());
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &dispatch());
+        assert!(code.contains("pub const TOOLS: &[(&str, &str, &str)] = &["));
+        let deny = code.find("(\"cargo-deny\", \"0.19.9\", \"cargo-deny\")");
+        let nextest = code.find("(\"cargo-nextest\", \"0.9.104\", \"cargo-nextest\")");
+        assert!(deny.is_some() && nextest.is_some(), "missing rows:\n{code}");
+        assert!(deny < nextest, "rows are not in name order");
+        let none = XtaskCompiler::compile_from_doc(&sample_doc(), &resolved, &dispatch());
+        assert!(!none.contains("TOOLS"), "no tools section, no table");
+    }
+
+    // SPEC-0003 requirement 14: a tool row without crate, version or bin is left out.
+    #[test]
+    fn tools_rows_need_crate_version_and_bin() {
+        let doc = json!({
+            "gg": { "unsigned": { "ls": { "tools": {
+                "broken": { "crate": "cargo-deny", "version": "0.19.9" }
+            } } } },
+            "org": { "projectfile": { "ci": sample_doc() } }
+        });
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&sample_doc());
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &dispatch());
+        assert!(
+            !code.contains("(\"cargo-deny\""),
+            "an incomplete row was emitted"
         );
     }
 

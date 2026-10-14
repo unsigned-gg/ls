@@ -4,6 +4,7 @@
 
 use std::path::Path;
 use std::process::ExitCode;
+use std::time::Instant;
 
 /// Default concurrent job limit on shared hosts.
 pub const DEFAULT_JOBS: usize = 2;
@@ -24,17 +25,47 @@ pub const XWORK_STAGES: &[(&str, &[&str])] = &[
 /// Execute the `xwork` verification pipeline in topological DAG order.
 ///
 /// `run_stage` runs one stage and returns its exit code. The first stage
-/// that does not succeed stops the pipeline.
+/// that does not succeed stops the pipeline. Then one summary line follows
+/// for each stage, and one verdict line.
 pub fn run_xwork<F>(root: &Path, mut run_stage: F) -> ExitCode
 where
     F: FnMut(&Path, &str, &[&str]) -> ExitCode,
 {
+    let width = XWORK_STAGES
+        .iter()
+        .map(|(stage, _)| stage.len())
+        .max()
+        .unwrap_or(0);
+    let mut lines = Vec::with_capacity(XWORK_STAGES.len());
+    let mut failed = None;
     for &(stage, args) in XWORK_STAGES {
+        if failed.is_some() {
+            lines.push(format!("xwork: not run {stage}"));
+            continue;
+        }
         println!("xtask: [{stage}] running...");
-        if run_stage(root, stage, args) != ExitCode::SUCCESS {
+        let start = Instant::now();
+        let ok = run_stage(root, stage, args) == ExitCode::SUCCESS;
+        let secs = start.elapsed().as_secs_f64();
+        if ok {
+            lines.push(format!("xwork: ok      {stage:<width$}  {secs:.1}s"));
+        } else {
             eprintln!("xtask: [{stage}] FAILED");
-            return ExitCode::FAILURE;
+            lines.push(format!("xwork: FAILED  {stage:<width$}  {secs:.1}s"));
+            failed = Some(stage);
         }
     }
-    ExitCode::SUCCESS
+    for line in &lines {
+        println!("{line}");
+    }
+    match failed {
+        Some(stage) => {
+            println!("xwork: FAILED at {stage}");
+            ExitCode::FAILURE
+        }
+        None => {
+            println!("xwork: ok ({} stages)", XWORK_STAGES.len());
+            ExitCode::SUCCESS
+        }
+    }
 }

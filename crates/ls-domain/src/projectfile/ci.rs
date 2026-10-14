@@ -258,6 +258,10 @@ impl CiResolver {
     /// Resolves a full CI fixture with `includes` and `input`.
     #[must_use]
     pub fn resolve_fixture(fixture: &Value) -> CiResolveResult {
+        Self::resolve_with(fixture, None)
+    }
+
+    fn resolve_with(fixture: &Value, only_goal: Option<&str>) -> CiResolveResult {
         let mut merged_nodes: BTreeMap<String, CiNode> = BTreeMap::new();
 
         // 1. Process includes in declaration order
@@ -295,7 +299,12 @@ impl CiResolver {
             .map(|(n, _)| n.clone())
             .collect();
 
-        let goals = if !flagged_goals.is_empty() {
+        let goals = if let Some(goal) = only_goal {
+            if !declared_nodes.contains(goal) {
+                return CiResolveResult::rejected("unknown-goal");
+            }
+            vec![goal.to_string()]
+        } else if !flagged_goals.is_empty() {
             flagged_goals
         } else {
             let mut needed: BTreeSet<String> = BTreeSet::new();
@@ -486,6 +495,15 @@ impl CiResolver {
         }
     }
 
+    /// Resolves the needs closure of one named node only (SPEC-0003 requirements 11, 12).
+    ///
+    /// The `goal: true` flags are ignored. A name that is not a declared node is
+    /// rejected with the code `unknown-goal`.
+    #[must_use]
+    pub fn resolve_goal(fixture: &Value, goal: &str) -> CiResolveResult {
+        Self::resolve_with(fixture, Some(goal))
+    }
+
     fn merge_nodes_into(dest: &mut BTreeMap<String, CiNode>, src: Option<&Value>) {
         let Some(nodes_obj) = src.and_then(|s| s.as_object()) else {
             return;
@@ -531,5 +549,58 @@ impl CiResolver {
 
         visited.insert(node.to_string(), 2);
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn goals_doc() -> Value {
+        json!({
+            "nodes": {
+                "formatted": { "needs": { "cargo-fmt": true } },
+                "ci": { "goal": true, "needs": { "formatted": true, "cargo-test": true } },
+                "install": { "needs": { "ci": true, "cargo-build-release": true } },
+                "hygiene": { "needs": { "typos": true } }
+            }
+        })
+    }
+
+    // SPEC-0003 requirement 11: --goal resolves that node's closure only.
+    #[test]
+    fn resolve_goal_takes_the_closure_of_one_node() {
+        let doc = goals_doc();
+        let install = CiResolver::resolve_goal(&doc, "install");
+        assert_eq!(install.reject, None);
+        assert_eq!(
+            install.runs,
+            vec!["cargo-fmt", "cargo-test", "cargo-build-release"]
+        );
+        let hygiene = CiResolver::resolve_goal(&doc, "hygiene");
+        assert_eq!(hygiene.runs, vec!["typos"]);
+    }
+
+    // SPEC-0003 requirement 11: the flagged goal does not leak into another goal.
+    #[test]
+    fn resolve_goal_ignores_the_flagged_goal() {
+        let doc = goals_doc();
+        let formatted = CiResolver::resolve_goal(&doc, "formatted");
+        assert_eq!(formatted.runs, vec!["cargo-fmt"]);
+        let ci = CiResolver::resolve_goal(&doc, "ci");
+        assert!(!ci.runs.contains(&"cargo-build-release".to_string()));
+        assert_eq!(ci.runs, CiResolver::resolve_fixture(&doc).runs);
+    }
+
+    // SPEC-0003 requirement 12: an undeclared goal is rejected.
+    #[test]
+    fn resolve_goal_rejects_an_unknown_node() {
+        let doc = goals_doc();
+        let res = CiResolver::resolve_goal(&doc, "no-such-node");
+        assert_eq!(res.reject.as_deref(), Some("unknown-goal"));
+        assert!(res.runs.is_empty());
+        let tool = CiResolver::resolve_goal(&doc, "cargo-fmt");
+        assert_eq!(tool.reject.as_deref(), Some("unknown-goal"));
     }
 }
