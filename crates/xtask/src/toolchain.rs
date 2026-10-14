@@ -67,7 +67,7 @@ pub fn verify(channel: &str, rustc_line: &str, rust_version: &str) -> Result<()>
     let actual = rustc_line
         .split_whitespace()
         .nth(1)
-        .ok_or_else(|| anyhow!("unparseable rustc line `{rustc_line}`"))?;
+        .ok_or_else(|| anyhow!("unparsable rustc line `{rustc_line}`"))?;
     if actual != channel {
         bail!("active rustc is {actual}, rust-toolchain.toml pins {channel}");
     }
