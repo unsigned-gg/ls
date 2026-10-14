@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 created: 2026-10-12
 tags: [projectfile, ci-compiler, interpolation, image-tags, justfile, zero-io]
 priority: critical
@@ -18,6 +18,16 @@ depends_on: [SPEC-0001-leanspec-ast]
 5. The image engine shall derive container image tags according to `org.projectfile.image`.
 6. The image engine shall reject variant collisions and publishing head shadowing.
 7. The compiler shall lower resolved CI intent DAGs into deterministic `Justfile` recipes.
+8. The compiler shall lower a resolved CI intent DAG into a deterministic Rust `xtask` module whose stage table lists the tools in resolved order.
+9. Where dispatch mode is selected, the generated `xtask` module shall call the host closure once for each stage in table order, stop at the first stage that does not succeed, and start no process.
+10. Where dispatch mode is selected, when the pipeline ends, the generated `xtask` module shall print one summary line for each stage (`ok` or `FAILED` with its time, or `not run`) and one verdict line.
+11. When `lsc pf ci generate` gets `--goal <node>`, the CI engine shall resolve the needs closure of that node only, and the compiler shall name the stage table and the runner after that node.
+12. If `--goal` names a node that the CI section does not declare, then the CI engine shall reject the DAG with the code `unknown-goal`.
+13. While a stage runs in spawn mode, the generated runner shall remove `CARGO_PKG_*`, `CARGO_MANIFEST_DIR` and `CARGO_MANIFEST_PATH` from the environment of that stage.
+14. Where `gg.unsigned.ls.tools` lists a tool with `crate`, `version` and `bin`, the compiler shall emit a `TOOLS` table of `(crate, version, bin)` rows in name order in the `xtask` module. If a row lacks a string `crate`, `version` or `bin`, then `lsc pf ci generate` shall reject the document with the code `incomplete-tool`.
+15. Where `gg.unsigned.ls.run` gives a command line for a stage, the compiler shall emit that command line for the stage in the `Justfile` and in spawn mode, instead of the stage name.
+16. The compiler shall lower a resolved CI intent DAG into a GitHub Actions job that runs `cargo xtask <goal>`.
+17. Where a node gives `needs` as a YAML sequence, the CI engine shall keep the tools of that node in sequence order.
 
 ```lean
 namespace Unsigned.Projectfile
@@ -106,6 +116,13 @@ projectfile Engine Pipeline
 - [x] Add a dispatch mode to the xtask compiler: the generated runner takes a closure for each stage and spawns no process.
 - [x] Expose CLI subcommands (`ls pf interp`, `ci resolve`, `ci generate`, `image tags`).
 - [x] Validate 100% of specification conformance vectors (43 test fixtures).
+- [x] Requirement 10: per-stage summary in dispatch mode (`xtask_target.rs`).
+- [x] Requirements 11 and 12: `--goal` and `unknown-goal` (`ci.rs`, `xtask_target.rs`, `lsc`).
+- [x] Requirement 13: environment scrub in spawn mode (`xtask_target.rs`).
+- [x] Requirement 14: `TOOLS` table from `gg.unsigned.ls.tools` (`xtask_target.rs`).
+- [ ] Requirement 15: `gg.unsigned.ls.run` command lines (`just_target.rs`, `xtask_target.rs`).
+- [ ] Requirement 16: GitHub Actions lowering (new `gha_target.rs`).
+- [ ] Requirement 17: sequence order inside a node (`ci.rs`; the upstream vectors treat `runs` as a set, so this is an ls choice).
 
 ## Verification
 

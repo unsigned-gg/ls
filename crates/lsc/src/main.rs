@@ -26,7 +26,7 @@ fn print_usage() {
     println!("    lsc pf interp <FILE>   Interpolate projectfile expressions (§3.8)");
     println!("    lsc pf ci resolve <F>  Resolve org.projectfile.ci intent DAG");
     println!(
-        "    lsc pf ci generate <F> Lower DAG to Rust xtask or Justfile (--target xtask|just, --dispatch)"
+        "    lsc pf ci generate <F> Lower DAG to Rust xtask or Justfile (--target xtask|just, --dispatch, --goal <node>)"
     );
     println!("    lsc pf image tags <F>  Derive org.projectfile.image variant tags");
     println!("    lsc --version, -v      Print version information");
@@ -224,7 +224,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
         println!("USAGE:");
         println!("    lsc pf interp <FILE> [--expr <EXPR>]    Interpolate projectfile (§3.8)");
         println!("    lsc pf ci resolve <FILE>                Resolve org.projectfile.ci DAG");
-        println!("    lsc pf ci generate <FILE> [--target xtask|just] [--dispatch] Lower DAG to Rust xtask or Justfile");
+        println!("    lsc pf ci generate <FILE> [--target xtask|just] [--dispatch] [--goal <node>] Lower DAG to Rust xtask or Justfile");
         println!("    lsc pf image tags <FILE>                Derive org.projectfile.image tags");
         return ExitCode::SUCCESS;
     }
@@ -316,6 +316,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     };
                     let mut target = "xtask";
                     let mut dispatch = false;
+                    let mut goal: Option<&str> = None;
                     let mut idx = 3;
                     while idx < args.len() {
                         if args[idx] == "--target" {
@@ -330,6 +331,16 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                             target = val;
                         } else if args[idx] == "--dispatch" {
                             dispatch = true;
+                        } else if args[idx] == "--goal" {
+                            if let Some(val) = args.get(idx + 1) {
+                                goal = Some(val.as_str());
+                                idx += 2;
+                                continue;
+                            }
+                            eprintln!("lsc pf ci generate: --goal requires a node name");
+                            return ExitCode::FAILURE;
+                        } else if let Some(val) = args[idx].strip_prefix("--goal=") {
+                            goal = Some(val);
                         }
                         idx += 1;
                     }
@@ -354,7 +365,11 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         .and_then(|o| o.get("projectfile"))
                         .and_then(|p| p.get("ci"))
                         .unwrap_or(&val);
-                    let res = lsc::CiResolver::resolve_fixture(ci_doc);
+                    // SPEC-0003 requirements 11 and 12: one named goal, or the flagged goals.
+                    let res = match goal {
+                        Some(node) => lsc::CiResolver::resolve_goal(ci_doc, node),
+                        None => lsc::CiResolver::resolve_fixture(ci_doc),
+                    };
                     if let Some(ref reject) = res.reject {
                         eprintln!("lsc pf ci generate: DAG rejected with code: '{reject}'");
                         return ExitCode::FAILURE;
@@ -363,11 +378,27 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         eprintln!("lsc pf ci generate: --dispatch only applies to --target xtask");
                         return ExitCode::FAILURE;
                     }
+                    if goal.is_some() && !matches!(target, "xtask" | "rust") {
+                        eprintln!("lsc pf ci generate: --goal only applies to --target xtask");
+                        return ExitCode::FAILURE;
+                    }
+                    // SPEC-0003 requirement 14: a tool pin with a missing field is an error.
+                    let incomplete = lsc::XtaskCompiler::incomplete_tools(&val);
+                    if !incomplete.is_empty() {
+                        eprintln!(
+                            "lsc pf ci generate: DAG rejected with code: 'incomplete-tool' (gg.unsigned.ls.tools: {}; each row needs string crate, version and bin)",
+                            incomplete.join(", ")
+                        );
+                        return ExitCode::FAILURE;
+                    }
                     match target {
                         "xtask" | "rust" => {
+                            let defaults = lsc::XtaskTargetOptions::default();
                             let options = lsc::XtaskTargetOptions {
                                 dispatch,
-                                ..lsc::XtaskTargetOptions::default()
+                                default_target: goal
+                                    .map_or(defaults.default_target.clone(), str::to_string),
+                                ..defaults
                             };
                             let out = lsc::XtaskCompiler::compile_from_doc(&val, &res, &options);
                             print!("{out}");
