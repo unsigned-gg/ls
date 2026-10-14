@@ -385,8 +385,23 @@ impl Ctx {
 
 /// Install each pinned tool that is missing or at another version (XT-3, XT-4).
 fn tools(ctx: &Ctx) -> Result<(), String> {
-    for tool in &TOOLS {
-        match ctx.probe(tool) {
+    ensure_tools(
+        &TOOLS,
+        |tool| ctx.probe(tool),
+        |tool| ctx.status(&install_command(tool, &ctx.root, &ctx.jobs)),
+    )
+}
+
+/// Install each tool that `probe` reports missing or at another version, then probe it
+/// again (XT-3, XT-4). Taking `probe` and `install` as arguments lets the tests reach the
+/// failure paths without spawning anything.
+fn ensure_tools(
+    tools: &[Tool],
+    mut probe: impl FnMut(&Tool) -> Option<String>,
+    mut install: impl FnMut(&Tool) -> Result<(), String>,
+) -> Result<(), String> {
+    for tool in tools {
+        match probe(tool) {
             Some(found) if version_matches(&found, tool.version) => {
                 println!("tools: {} {} ok", tool.krate, tool.version);
                 continue;
@@ -399,8 +414,8 @@ fn tools(ctx: &Ctx) -> Result<(), String> {
             ),
             None => println!("tools: {} missing, installing {}", tool.krate, tool.version),
         }
-        ctx.status(&install_command(tool, &ctx.root, &ctx.jobs))?;
-        match ctx.probe(tool) {
+        install(tool)?;
+        match probe(tool) {
             Some(found) if version_matches(&found, tool.version) => {
                 println!("tools: {} {} installed", tool.krate, tool.version);
             }
@@ -645,6 +660,83 @@ mod tests {
                 "CARGO_PRIMARY_PACKAGE"
             ])
         );
+    }
+
+    // XT-6: the command a gate spawns drops the package variables cargo set for xtask.
+    #[test]
+    fn xt6_spawned_commands_drop_the_package_variables() {
+        // `cargo test` sets these for the test binary, as `cargo run` does for xtask.
+        assert!(std::env::var_os("CARGO_PKG_NAME").is_some());
+        assert!(std::env::var_os("CARGO_MANIFEST_DIR").is_some());
+        let cmd = Ctx::new(Path::new(".")).command(&strings(&["true"]));
+        let removed: Vec<String> = cmd
+            .get_envs()
+            .filter(|(_, value)| value.is_none())
+            .map(|(name, _)| name.to_string_lossy().into_owned())
+            .collect();
+        for name in ["CARGO_PKG_NAME", "CARGO_MANIFEST_DIR"] {
+            assert!(
+                removed.iter().any(|r| r == name),
+                "{name} is not removed: {removed:?}"
+            );
+        }
+    }
+
+    // XT-4: a tool at the pinned version is not installed again.
+    #[test]
+    fn xt4_a_tool_at_the_pin_is_left_alone() {
+        let mut installed = Vec::new();
+        let result = ensure_tools(
+            &[DENY],
+            |tool| Some(format!("{} {}", tool.krate, tool.version)),
+            |tool| {
+                installed.push(tool.krate);
+                Ok(())
+            },
+        );
+        assert_eq!(result, Ok(()));
+        assert!(installed.is_empty());
+    }
+
+    // XT-4: a missing tool is installed, then probed again.
+    #[test]
+    fn xt4_a_missing_tool_is_installed_and_probed_again() {
+        let mut probes = 0;
+        let mut installed = Vec::new();
+        let result = ensure_tools(
+            &[DENY],
+            |tool| {
+                probes += 1;
+                (probes > 1).then(|| format!("{} {}", tool.krate, tool.version))
+            },
+            |tool| {
+                installed.push(tool.krate);
+                Ok(())
+            },
+        );
+        assert_eq!(result, Ok(()));
+        assert_eq!(installed, ["cargo-deny"]);
+        assert_eq!(probes, 2);
+    }
+
+    // XT-4: if another copy still answers after the install, the gate fails and says so.
+    #[test]
+    fn xt4_another_copy_ahead_of_dot_tools_is_an_error() {
+        let result = ensure_tools(
+            &[DENY],
+            |_| Some("cargo-deny 0.18.0".to_string()),
+            |_| Ok(()),
+        );
+        let err = result.expect_err("a wrong version after install must fail");
+        assert!(err.contains("ahead of .tools/bin"), "{err}");
+        assert!(err.contains("cargo-deny 0.18.0"), "{err}");
+    }
+
+    // XT-4: a failed install stops the gate with that error.
+    #[test]
+    fn xt4_a_failed_install_is_an_error() {
+        let result = ensure_tools(&[DENY], |_| None, |_| Err("no network".to_string()));
+        assert_eq!(result, Err("no network".to_string()));
     }
 
     #[test]
