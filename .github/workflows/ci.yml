@@ -29,6 +29,7 @@ jobs:
     outputs:
       rust: ${{ steps.decide.outputs.rust }}
       deps: ${{ steps.decide.outputs.deps }}
+      docs: ${{ steps.decide.outputs.docs }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -52,16 +53,25 @@ jobs:
               - 'Cargo.toml'
               - 'deny.toml'
               - '.github/workflows/ci.yml'
+            # Markdown alone still runs xtask-ci, whose typos gate checks it (XT-9).
+            docs:
+              - '**/*.md'
       # A manual run has no base to diff against, so it runs everything.
       - name: decide
         id: decide
         run: |
           if [ "${{ github.event_name }}" = workflow_dispatch ]; then
-            echo "rust=true" >> "$GITHUB_OUTPUT"
-            echo "deps=true" >> "$GITHUB_OUTPUT"
+            {
+              echo "rust=true"
+              echo "deps=true"
+              echo "docs=true"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "rust=${{ steps.filter.outputs.rust }}" >> "$GITHUB_OUTPUT"
-            echo "deps=${{ steps.filter.outputs.deps }}" >> "$GITHUB_OUTPUT"
+            {
+              echo "rust=${{ steps.filter.outputs.rust }}"
+              echo "deps=${{ steps.filter.outputs.deps }}"
+              echo "docs=${{ steps.filter.outputs.docs }}"
+            } >> "$GITHUB_OUTPUT"
           fi
 
   fmt:
@@ -174,3 +184,30 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.9
       - name: cargo xtask xwork
         run: cargo xtask xwork
+
+  xtask-ci:
+    name: xtask-ci
+    needs: changes
+    if: needs.changes.outputs.rust == 'true' || needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # Third-party crates build in this job; keep the token out of .git/config.
+          persist-credentials: false
+      # rustup installs the rust-toolchain.toml pin (rustfmt and clippy included).
+      - name: toolchain
+        run: |
+          rustup toolchain install
+          rustc --version
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: xtask-ci
+          # The tool pins live in gates.rs, so a pin change must miss the cache.
+          key: ${{ hashFiles('crates/xtask/src/gates.rs') }}
+          # The pinned tools `cargo xtask tools` builds into .tools/.
+          cache-directories: .tools
+          cache-on-failure: true
+      - name: cargo xtask ci
+        run: cargo xtask ci

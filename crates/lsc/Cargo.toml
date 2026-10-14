@@ -19,11 +19,6 @@ workspace = true
 
 [dependencies]
 lsc-core = { path = "../lsc-core" }
-anyhow = { workspace = true }
-blake3 = { workspace = true }
-serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-thiserror = { workspace = true }
-tracing = { workspace = true }
 

@@ -81,6 +81,17 @@ make check
 make smoke
 ```
 
+The cargo-only gate (SPEC-0004) needs cargo and rustup, a C compiler (the first run builds the
+pinned tools, and some of their dependencies compile C), and network access to crates.io, to
+rustup and to the RustSec advisory database:
+```bash
+cargo xtask ci        # tools, toolchain-check, fmt-check, clippy, test, doc-test, deny, typos, machete
+cargo xtask install   # ci, then release builds of every binary
+```
+rustup installs the Rust that `rust-toolchain.toml` pins, and `cargo xtask tools` (the first
+step of `ci`) installs cargo-deny, typos, cargo-machete and cargo-nextest at pinned versions
+into `.tools/`.
+
 ## Specifications & Sessions
 - Architectural Roadmap: [ROADMAP.md](ROADMAP.md) · [SPEC-0002-initial-roadmap.md](specs/SPEC-0002-initial-roadmap.md)
 - Formal Architecture Specification: [SPEC-0001-leanspec-ast.md](specs/SPEC-0001-leanspec-ast.md)

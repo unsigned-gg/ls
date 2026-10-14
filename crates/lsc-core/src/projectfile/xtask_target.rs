@@ -608,11 +608,14 @@ mod tests {
         let doc = json!({
             "gg": { "unsigned": { "ls": { "tools": {
                 "deny": { "crate": "cargo-deny", "version": "0.19.9", "bin": "cargo-deny" },
-                "typo": { "crate": "cargo-nextest", "vesion": "0.9.104", "bin": "cargo-nextest" },
+                "no-version": { "crate": "cargo-nextest", "bin": "cargo-nextest" },
                 "bare": "cargo-audit"
             } } } }
         });
-        assert_eq!(XtaskCompiler::incomplete_tools(&doc), vec!["bare", "typo"]);
+        assert_eq!(
+            XtaskCompiler::incomplete_tools(&doc),
+            vec!["bare", "no-version"]
+        );
         assert!(XtaskCompiler::incomplete_tools(&sample_doc()).is_empty());
     }
 
