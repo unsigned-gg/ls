@@ -26,7 +26,7 @@ fn print_usage() {
     println!("    lsc pf interp <FILE>   Interpolate projectfile expressions (§3.8)");
     println!("    lsc pf ci resolve <F>  Resolve org.projectfile.ci intent DAG");
     println!(
-        "    lsc pf ci generate <F> Lower DAG to Rust xtask or Justfile (--target xtask|just)"
+        "    lsc pf ci generate <F> Lower DAG to Rust xtask or Justfile (--target xtask|just, --dispatch)"
     );
     println!("    lsc pf image tags <F>  Derive org.projectfile.image variant tags");
     println!("    lsc --version, -v      Print version information");
@@ -224,7 +224,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
         println!("USAGE:");
         println!("    lsc pf interp <FILE> [--expr <EXPR>]    Interpolate projectfile (§3.8)");
         println!("    lsc pf ci resolve <FILE>                Resolve org.projectfile.ci DAG");
-        println!("    lsc pf ci generate <FILE> [--target xtask|just] Lower DAG to Rust xtask or Justfile");
+        println!("    lsc pf ci generate <FILE> [--target xtask|just] [--dispatch] Lower DAG to Rust xtask or Justfile");
         println!("    lsc pf image tags <FILE>                Derive org.projectfile.image tags");
         return ExitCode::SUCCESS;
     }
@@ -315,6 +315,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         return ExitCode::FAILURE;
                     };
                     let mut target = "xtask";
+                    let mut dispatch = false;
                     let mut idx = 3;
                     while idx < args.len() {
                         if args[idx] == "--target" {
@@ -327,6 +328,8 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                             return ExitCode::FAILURE;
                         } else if let Some(val) = args[idx].strip_prefix("--target=") {
                             target = val;
+                        } else if args[idx] == "--dispatch" {
+                            dispatch = true;
                         }
                         idx += 1;
                     }
@@ -356,9 +359,16 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         eprintln!("lsc pf ci generate: DAG rejected with code: '{reject}'");
                         return ExitCode::FAILURE;
                     }
+                    if dispatch && !matches!(target, "xtask" | "rust") {
+                        eprintln!("lsc pf ci generate: --dispatch only applies to --target xtask");
+                        return ExitCode::FAILURE;
+                    }
                     match target {
                         "xtask" | "rust" => {
-                            let options = ls::XtaskTargetOptions::default();
+                            let options = ls::XtaskTargetOptions {
+                                dispatch,
+                                ..ls::XtaskTargetOptions::default()
+                            };
                             let out = ls::XtaskCompiler::compile_from_doc(&val, &res, &options);
                             print!("{out}");
                             ExitCode::SUCCESS

@@ -64,18 +64,33 @@ org:
     operating-system: [ linux ]
     architecture: [ amd64 ]
     ci:
+      # Stage order is the DAG order: a node runs after every node it needs. Tools inside one
+      # node run in name order, so a stage that must come earlier gets its own node.
       nodes:
-        hygiene:
+        toolchain:
           needs:
             toolchain-check: true
-            spec-check: true
+        hygiene:
+          needs:
+            toolchain: true
             projectfile-check: true
+            spec-check: true
+            stages-check: true
             zero-io-domain: true
-        check:
-          goal: true
+        formatted:
           needs:
             hygiene: true
             cargo-fmt: true
+        linted:
+          needs:
+            formatted: true
             cargo-clippy: true
+        tested:
+          needs:
+            linted: true
             cargo-test: true
+        check:
+          goal: true
+          needs:
+            tested: true
             cargo-doc-test: true

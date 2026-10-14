@@ -62,6 +62,11 @@ lsc pf ci resolve projectfile.yaml
 lsc pf ci generate projectfile.yaml --target xtask
 lsc pf ci generate projectfile.yaml --target just
 
+# Dispatch mode: emit a runner that hands each stage to your own xtask instead of spawning
+# it. This repository's `crates/xtask/src/stages.rs` is generated this way
+# (`cargo xtask stages-gen`), and `cargo xtask stages-check` fails if it drifts.
+lsc pf ci generate projectfile.yaml --target xtask --dispatch
+
 # Derive container image variant tags from org.projectfile.image
 lsc pf image tags projectfile.yaml
 ```

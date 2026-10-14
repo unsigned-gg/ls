@@ -24,6 +24,12 @@ pub struct XtaskTargetOptions {
     pub default_target: String,
     /// Whether to emit provenance header comments.
     pub emit_preamble: bool,
+    /// Emit a dispatching runner instead of one that spawns each stage as a program.
+    ///
+    /// The generated `run_xwork` then takes a closure that runs one stage, so the stage
+    /// names in the projectfile stay the single source of order while the host `xtask`
+    /// keeps the implementation of every stage. The generated module spawns no process.
+    pub dispatch: bool,
 }
 
 impl Default for XtaskTargetOptions {
@@ -32,6 +38,7 @@ impl Default for XtaskTargetOptions {
             default_jobs: 2,
             default_target: "xwork".to_string(),
             emit_preamble: true,
+            dispatch: false,
         }
     }
 }
@@ -53,10 +60,18 @@ impl XtaskCompiler {
             out.push_str("// Specification: https://projectfile.org/spec/v1\n\n");
         }
 
-        out.push_str("use std::env;\n");
-        out.push_str("use std::path::Path;\n");
-        out.push_str(concat!("use std::", "process::{Command, ExitCode};\n\n"));
+        if options.dispatch {
+            out.push_str("use std::path::Path;\n");
+            out.push_str(concat!("use std::", "process::ExitCode;\n\n"));
+        } else {
+            out.push_str("use std::env;\n");
+            out.push_str("use std::path::Path;\n");
+            out.push_str(concat!("use std::", "process::{Command, ExitCode};\n\n"));
+        }
 
+        if options.dispatch {
+            out.push_str("/// Default concurrent job limit on shared hosts.\n");
+        }
         out.push_str(&format!(
             "pub const DEFAULT_JOBS: usize = {};\n\n",
             options.default_jobs
@@ -89,6 +104,33 @@ impl XtaskCompiler {
 
         // Runner function
         let fn_ident = Self::sanitize_ident(&options.default_target);
+        if options.dispatch {
+            out.push_str(&format!(
+                "/// Execute the `{}` verification pipeline in topological DAG order.\n",
+                options.default_target
+            ));
+            out.push_str("///\n");
+            out.push_str(
+                "/// `run_stage` runs one stage and returns its exit code. The first stage\n",
+            );
+            out.push_str("/// that does not succeed stops the pipeline.\n");
+            out.push_str(&format!(
+                "pub fn run_{fn_ident}<F>(root: &Path, mut run_stage: F) -> ExitCode\n"
+            ));
+            out.push_str("where\n");
+            out.push_str("    F: FnMut(&Path, &str, &[&str]) -> ExitCode,\n");
+            out.push_str("{\n");
+            out.push_str("    for &(stage, args) in XWORK_STAGES {\n");
+            out.push_str("        println!(\"xtask: [{stage}] running...\");\n");
+            out.push_str("        if run_stage(root, stage, args) != ExitCode::SUCCESS {\n");
+            out.push_str("            eprintln!(\"xtask: [{stage}] FAILED\");\n");
+            out.push_str("            return ExitCode::FAILURE;\n");
+            out.push_str("        }\n");
+            out.push_str("    }\n");
+            out.push_str("    ExitCode::SUCCESS\n");
+            out.push_str("}\n");
+            return out;
+        }
         out.push_str(&format!(
             "/// Execute the `{}` verification pipeline in topological DAG order.\n",
             options.default_target
@@ -201,5 +243,69 @@ mod tests {
             "(\"cargo-clippy\", &[\"--workspace\", \"-j\", \"2\", \"--\", \"-D\", \"warnings\"])"
         ));
         assert!(code.contains("pub fn run_xwork(root: &Path) -> ExitCode"));
+    }
+
+    fn sample_doc() -> Value {
+        json!({
+            "nodes": {
+                "hygiene": { "needs": { "toolchain-check": true, "spec-check": true } },
+                "check": {
+                    "goal": true,
+                    "needs": {
+                        "hygiene": true,
+                        "cargo-fmt": { "args": "--all -- --check" }
+                    }
+                }
+            }
+        })
+    }
+
+    #[test]
+    fn dispatch_mode_emits_closure_runner_and_spawns_nothing() {
+        let doc = sample_doc();
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&doc);
+        let opts = XtaskTargetOptions {
+            dispatch: true,
+            ..XtaskTargetOptions::default()
+        };
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &opts);
+
+        assert!(code.contains("pub fn run_xwork<F>(root: &Path, mut run_stage: F) -> ExitCode"));
+        assert!(code.contains("F: FnMut(&Path, &str, &[&str]) -> ExitCode,"));
+        assert!(code.contains("(\"cargo-fmt\", &[\"--all\", \"--\", \"--check\"])"));
+        assert!(
+            !code.contains("Command"),
+            "dispatch mode must not spawn a process"
+        );
+        assert!(
+            !code.contains("std::env"),
+            "dispatch mode must not read the environment"
+        );
+    }
+
+    #[test]
+    fn dispatch_mode_keeps_dependency_order() {
+        let doc = sample_doc();
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&doc);
+        let opts = XtaskTargetOptions {
+            dispatch: true,
+            ..XtaskTargetOptions::default()
+        };
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &opts);
+        let spec = code.find("\"spec-check\"").expect("spec-check stage");
+        let fmt = code.find("\"cargo-fmt\"").expect("cargo-fmt stage");
+        assert!(
+            spec < fmt,
+            "hygiene stages must precede the goal's own tools"
+        );
+    }
+
+    #[test]
+    fn default_mode_still_spawns_each_stage() {
+        let doc = sample_doc();
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&doc);
+        let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &XtaskTargetOptions::default());
+        assert!(code.contains("Command::new(tool)"));
+        assert!(!code.contains("run_stage"));
     }
 }
