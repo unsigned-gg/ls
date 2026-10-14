@@ -26,7 +26,7 @@ fn root() -> PathBuf {
 
 fn spec_check(root: &Path) -> ExitCode {
     let status = Command::new(env!("CARGO"))
-        .args(["run", "-q", "-p", "ls", "-j", "2", "--", "check", "specs/"])
+        .args(["run", "-q", "-p", "lsc", "-j", "2", "--", "check", "specs/"])
         .current_dir(root)
         .status();
     match status {
@@ -48,7 +48,7 @@ fn projectfile_check(root: &Path) -> ExitCode {
             "run",
             "-q",
             "-p",
-            "ls",
+            "lsc",
             "-j",
             "2",
             "--",
@@ -73,12 +73,12 @@ fn projectfile_check(root: &Path) -> ExitCode {
 }
 
 fn verify_zero_io_domain(root: &Path) -> Result<(), String> {
-    let domain_src = root.join("crates/ls-domain/src");
+    let domain_src = root.join("crates/lsc-core/src");
     let mut violations = Vec::new();
     scan_dir_for_io(&domain_src, &mut violations)?;
     if !violations.is_empty() {
         return Err(format!(
-            "ls-domain must not use I/O, found forbidden imports:\n  {}",
+            "lsc-core must not use I/O, found forbidden imports:\n  {}",
             violations.join("\n  ")
         ));
     }
@@ -173,7 +173,7 @@ fn run_stage(root: &Path, stage: &str, _args: &[&str]) -> ExitCode {
         Some(Action::StagesCheck) => stages_check(root),
         Some(Action::ZeroIo) => match verify_zero_io_domain(root) {
             Ok(()) => {
-                println!("zero-io-domain: ok (crates/ls-domain/src has zero I/O imports)");
+                println!("zero-io-domain: ok (crates/lsc-core/src has zero I/O imports)");
                 ExitCode::SUCCESS
             }
             Err(err) => {
@@ -209,7 +209,7 @@ fn generated_stages(root: &Path) -> Option<Vec<u8>> {
             "run",
             "-q",
             "-p",
-            "ls",
+            "lsc",
             "-j",
             "2",
             "--",
@@ -317,7 +317,7 @@ mod tests {
     }
 
     #[test]
-    fn ls_domain_is_free_of_io() {
-        verify_zero_io_domain(&root()).expect("ls-domain must be free of I/O");
+    fn lsc_core_is_free_of_io() {
+        verify_zero_io_domain(&root()).expect("lsc-core must be free of I/O");
     }
 }

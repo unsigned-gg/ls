@@ -53,7 +53,7 @@ theorem cell_count_positive (cells : Nat) (h : cells > 0) : cells >= 1 := by
 
 ### Zero-I/O Domain Engine Architecture
 
-The projectfile engine in `crates/ls-domain` executes completely in memory without filesystem, process, or network access.
+The projectfile engine in `crates/lsc-core` executes completely in memory without filesystem, process, or network access.
 
 ```
 projectfile Engine Pipeline
@@ -130,9 +130,9 @@ Execute test suites and verify specification conformance:
 
 ```bash
 cargo test -j 2 --test conformance_tests
-cargo run -p ls -j 2 -- pf ci resolve crates/ls-domain/tests/conformance/ci/matrix-exclude.yaml
-cargo run -p ls -j 2 -- pf ci generate crates/ls-domain/tests/conformance/ci/matrix-exclude.yaml
-cargo run -p ls -j 2 -- pf image tags crates/ls-domain/tests/conformance/image/two-axes.yaml
+cargo run -p lsc -j 2 -- pf ci resolve crates/lsc-core/tests/conformance/ci/matrix-exclude.yaml
+cargo run -p lsc -j 2 -- pf ci generate crates/lsc-core/tests/conformance/ci/matrix-exclude.yaml
+cargo run -p lsc -j 2 -- pf image tags crates/lsc-core/tests/conformance/image/two-axes.yaml
 ```
 
 ## Notes

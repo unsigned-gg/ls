@@ -16,7 +16,7 @@ depends_on: [SPEC-0001-leanspec-ast]
 3. Phase 2 shall implement advanced conformance rules, ASD-STE100 linting, and EARS syntax verification.
 4. Phase 3 shall provide automated SMT-LIB2 proof discharge into Z3 and coinductive stream analysis.
 5. Phase 4 shall deliver contiguous arena allocation for mass multi-tenant specification scanning.
-6. The roadmap shall maintain strict zero-I/O isolation in `ls-domain`.
+6. The roadmap shall maintain strict zero-I/O isolation in `lsc-core`.
 7. Every architectural phase shall define testable completion criteria.
 
 ```lean
@@ -53,7 +53,7 @@ The development of `ls` proceeds across four phased horizons. Each horizon expan
 ```
 Development Horizons
 ├── Phase 1: Core AST & CAS Foundation (Complete)
-│   ├── Pure domain model in crates/ls-domain
+│   ├── Pure domain model in crates/lsc-core
 │   ├── YAML frontmatter and section parser
 │   ├── Architectural validation rules R01-R16
 │   └── BLAKE3 Content-Addressed Storage listing
@@ -77,7 +77,7 @@ Development Horizons
 ### Phase Breakdown & Acceptance Criteria
 
 #### Phase 1: Core AST & CAS Foundation (Status: Complete)
-- Implement pure `ls-domain` without `std::fs`, `std::net`, or async runtimes.
+- Implement pure `lsc-core` without `std::fs`, `std::net`, or async runtimes.
 - Extract YAML frontmatter, canonical H2 sections, and embedded Lean 4 theorem blocks.
 - Compute deterministic 256-bit BLAKE3 hashes for documents and directory trees.
 - Provide CLI subcommands: `check`, `hash`, `list`, `parse`, and `theorems`.
@@ -88,7 +88,7 @@ Development Horizons
 - Implement Easy Approach to Requirements Syntax (EARS) clause validation.
 - Detect cross-file dependency cycles using Tarjan strongly connected components.
 - Enhance CLI diagnostics with source snippets and column pointers.
-- Maintain zero-I/O purity in `ls-domain`.
+- Maintain zero-I/O purity in `lsc-core`.
 
 #### Phase 3: Formal Lean 4 & SMT Discharge (Status: Planned)
 - Support bidirectional Lean 4 Lake manifest extraction.
@@ -104,12 +104,12 @@ Development Horizons
 
 ## Tasks
 
-- [x] Phase 1: Implement zero-I/O `ls-domain` AST models and parser.
+- [x] Phase 1: Implement zero-I/O `lsc-core` AST models and parser.
 - [x] Phase 1: Implement BLAKE3 CAS hashing and Merkle tree generation.
 - [x] Phase 1: Deliver CLI tools: `ls check`, `ls hash`, `ls list`, `ls parse`, `ls theorems`.
 - [x] Phase 1: Author formal grammar specification [SPEC-0001-leanspec-ast.md](./SPEC-0001-leanspec-ast.md).
 - [ ] Phase 2: Add ASD-STE100 sentence length checker to `ls check`.
-- [ ] Phase 2: Implement EARS clause prefix validation in `ls-domain`.
+- [ ] Phase 2: Implement EARS clause prefix validation in `lsc-core`.
 - [ ] Phase 2: Implement Tarjan topological cycle detector for spec dependencies.
 - [ ] Phase 2: Add terminal color diagnostics with source snippet context.
 - [ ] Phase 3: Implement SMT-LIB2 arithmetic proof translation.
@@ -123,14 +123,14 @@ Execute test suites and verify specification conformance:
 
 ```bash
 cargo test -j 2
-cargo run -p ls -j 2 -- check specs
-cargo run -p ls -j 2 -- hash specs
-cargo run -p ls -j 2 -- list specs
-cargo run -p ls -j 2 -- theorems specs
+cargo run -p lsc -j 2 -- check specs
+cargo run -p lsc -j 2 -- hash specs
+cargo run -p lsc -j 2 -- list specs
+cargo run -p lsc -j 2 -- theorems specs
 ```
 
 ## Notes
 
 - Specifications adhere to ASD-STE100 controlled language rules.
-- Pure domain models remain in `crates/ls-domain` with zero I/O imports.
+- Pure domain models remain in `crates/lsc-core` with zero I/O imports.
 - Host physical throttling mandates `-j 2` across all compilation steps.

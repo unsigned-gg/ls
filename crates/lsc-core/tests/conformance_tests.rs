@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-use ls_domain::projectfile::{
+use lsc_core::projectfile::{
     CiResolveResult, CiResolver, ImageResolver, JustTargetOptions, JustfileCompiler,
     ProjectfileInterpolator,
 };

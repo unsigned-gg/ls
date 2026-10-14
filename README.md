@@ -4,19 +4,19 @@
 
 > **LeanSpec AST Parser, Structural Conformance Checker, and CAS Listing Engine**  
 > Fast, deterministic specification parsing, Lean 4 theorem AST extraction, validation rules (R01–R16), and BLAKE3 Content-Addressed Storage listing.  
-> Tri-licensed under `Apache-2.0 OR MIT OR CC0-1.0`.
+> Dual-licensed under `Apache-2.0 OR MIT`.
 
 ## Architectural Invariants & Machine Sympathy
 - **Substantive Systems Implementation:** Fully functional LeanSpec parser and validation rule engine with zero vanity stubs.
-- **Zero-I/O Domain Isolation:** `ls-domain` has zero dependencies on `std::fs`, `std::net`, `std::process`, or async runtimes. All AST models, frontmatter parsing, theorem parsing, and rule validations operate on pure memory buffers.
+- **Zero-I/O Domain Isolation:** `lsc-core` has zero dependencies on `std::fs`, `std::net`, `std::process`, or async runtimes. All AST models, frontmatter parsing, theorem parsing, and rule validations operate on pure memory buffers.
 - **Controlled Language & Verification:** Built for ASD-STE100 technical precision and deterministic build verification.
 - **Content-Addressed Storage (CAS):** 256-bit BLAKE3 cryptographic hashing for specification documents, theorem bodies, and directory trees.
 
 ## Crate Layout
 | Crate | Responsibility |
 |---|---|
-| `crates/ls-domain` | Pure zero-I/O LeanSpec AST types, Lean 4 theorem statements, frontmatter parser, BLAKE3 CAS algorithms, and rule validators (R01–R16). |
-| `crates/ls` | CLI binary (`lsc`) and filesystem scanner for specification suites (`lsc check`, `lsc hash`, `lsc list`, `lsc parse`, `lsc theorems`). |
+| `crates/lsc-core` | Pure zero-I/O LeanSpec AST types, Lean 4 theorem statements, frontmatter parser, BLAKE3 CAS algorithms, and rule validators (R01–R16). |
+| `crates/lsc` | CLI binary (`lsc`) and filesystem scanner for specification suites (`lsc check`, `lsc hash`, `lsc list`, `lsc parse`, `lsc theorems`). |
 
 ## CLI Usage
 
@@ -88,10 +88,9 @@ make smoke
 - Elf Conclave Transcript: [2026-10-11-ls-formal-ast.irc](sessions/2026-10-11-ls-formal-ast.irc)
 
 ## License
-Tri-licensed under either of:
+Dual-licensed under either of:
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
 - MIT License ([LICENSE-MIT](LICENSE-MIT))
-- Creative Commons Zero 1.0 Universal ([LICENSE-CC0](LICENSE-CC0))
 
 ## Principles
 
