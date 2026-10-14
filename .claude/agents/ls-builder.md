@@ -14,7 +14,7 @@ in your assigned workspace and report what a command proved. Builders fabricate 
 - You work only inside your designated workspace. You write only the files the brief names.
 - Mandatory host throttling: ALL `cargo` invocations MUST specify `-j 2` on host ceres.
 - Dual licensing: Apache-2.0 OR MIT on all new files.
-- Zero-I/O domain model: `ls-domain` must never perform filesystem, process, network, or async I/O.
+- Zero-I/O domain model: `lsc-core` must never perform filesystem, process, network, or async I/O.
 - LeanSpec Invariant: Rules R01-R13 must evaluate deterministically against specification ASTs.
 - Commit signed and conventional as you go (`git commit -S`).
 

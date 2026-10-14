@@ -132,7 +132,7 @@ pub fn run_package(root: &Path) -> ExitCode {
                     "-j",
                     "2",
                     "-p",
-                    "ls",
+                    "lsc",
                     "--target",
                     TARGET,
                 ])

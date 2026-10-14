@@ -51,6 +51,6 @@ jobs:
       - name: test build
         run: cargo test --workspace --no-run -j 2
       - name: musl release build
-        run: cargo build --release -j 2 -p ls --target x86_64-unknown-linux-musl
+        run: cargo build --release -j 2 -p lsc --target x86_64-unknown-linux-musl
       - name: sccache stats
         run: sccache --show-stats

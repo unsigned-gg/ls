@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use ls::{
+use lsc::{
     check_directory, format_report, parse_spec, scan_cas_path, scan_specs_dir, ValidationReport,
 };
 
@@ -249,7 +249,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     return ExitCode::FAILURE;
                 }
             };
-            let interpolator = ls::ProjectfileInterpolator::new(&val);
+            let interpolator = lsc::ProjectfileInterpolator::new(&val);
             if args.len() >= 4 && args[2] == "--expr" {
                 let expr = &args[3];
                 let out = interpolator.interpolate_string(expr, None, 0);
@@ -294,7 +294,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         .and_then(|o| o.get("projectfile"))
                         .and_then(|p| p.get("ci"))
                         .unwrap_or(&val);
-                    let res = ls::CiResolver::resolve_fixture(ci_doc);
+                    let res = lsc::CiResolver::resolve_fixture(ci_doc);
                     let json = match serde_json::to_string_pretty(&res) {
                         Ok(j) => j,
                         Err(err) => {
@@ -354,7 +354,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         .and_then(|o| o.get("projectfile"))
                         .and_then(|p| p.get("ci"))
                         .unwrap_or(&val);
-                    let res = ls::CiResolver::resolve_fixture(ci_doc);
+                    let res = lsc::CiResolver::resolve_fixture(ci_doc);
                     if let Some(ref reject) = res.reject {
                         eprintln!("lsc pf ci generate: DAG rejected with code: '{reject}'");
                         return ExitCode::FAILURE;
@@ -365,18 +365,18 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     }
                     match target {
                         "xtask" | "rust" => {
-                            let options = ls::XtaskTargetOptions {
+                            let options = lsc::XtaskTargetOptions {
                                 dispatch,
-                                ..ls::XtaskTargetOptions::default()
+                                ..lsc::XtaskTargetOptions::default()
                             };
-                            let out = ls::XtaskCompiler::compile_from_doc(&val, &res, &options);
+                            let out = lsc::XtaskCompiler::compile_from_doc(&val, &res, &options);
                             print!("{out}");
                             ExitCode::SUCCESS
                         }
                         "just" | "justfile" => {
-                            let options = ls::JustTargetOptions::default();
+                            let options = lsc::JustTargetOptions::default();
                             let out =
-                                ls::JustfileCompiler::compile_from_doc(ci_doc, &res, &options);
+                                lsc::JustfileCompiler::compile_from_doc(ci_doc, &res, &options);
                             print!("{out}");
                             ExitCode::SUCCESS
                         }
@@ -421,7 +421,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     };
-                    let res = ls::ImageResolver::resolve_fixture(&val);
+                    let res = lsc::ImageResolver::resolve_fixture(&val);
                     let json = match serde_json::to_string_pretty(&res) {
                         Ok(j) => j,
                         Err(err) => {
@@ -445,7 +445,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
     }
 }
 
-fn print_doc_theorems(doc: &ls::SpecDocument) {
+fn print_doc_theorems(doc: &lsc::SpecDocument) {
     if doc.theorems.is_empty() {
         return;
     }
@@ -466,10 +466,10 @@ fn print_doc_theorems(doc: &ls::SpecDocument) {
             th.tactics.join(",")
         };
         let status_str = match th.proof_status {
-            ls::ProofStatus::Proved { tactic_count } => format!("proved({tactic_count})"),
-            ls::ProofStatus::Sorry => "sorry".to_owned(),
-            ls::ProofStatus::Axiom => "axiom".to_owned(),
-            ls::ProofStatus::Omitted => "omitted".to_owned(),
+            lsc::ProofStatus::Proved { tactic_count } => format!("proved({tactic_count})"),
+            lsc::ProofStatus::Sorry => "sorry".to_owned(),
+            lsc::ProofStatus::Axiom => "axiom".to_owned(),
+            lsc::ProofStatus::Omitted => "omitted".to_owned(),
         };
         println!(
             "{:<28} {:<12} {:<10} {:<30}",

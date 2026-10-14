@@ -112,7 +112,7 @@ Every file and directory tree maps to a cryptographic digest:
 
 ## Tasks
 
-- [x] Implement pure `ls-domain` AST models and zero-I/O Lean 4 parser.
+- [x] Implement pure `lsc-core` AST models and zero-I/O Lean 4 parser.
 - [x] Implement BLAKE3 CAS hashing and Merkle tree computation.
 - [x] Implement CLI commands: `ls check`, `ls hash`, `ls list`, `ls parse`, `ls theorems`.
 - [x] Wire open-source CI/CD workflow with clippy, test, check, audit.
@@ -129,12 +129,12 @@ cargo test -j 2
 Validate specification directory conformance and CAS root hash:
 
 ```bash
-cargo run -p ls -j 2 -- check specs
-cargo run -p ls -j 2 -- hash specs
+cargo run -p lsc -j 2 -- check specs
+cargo run -p lsc -j 2 -- hash specs
 ```
 
 ## Notes
 
 - Specifications follow ASD-STE100 controlled language rules.
-- Pure domain models live in `crates/ls-domain` with zero I/O imports.
+- Pure domain models live in `crates/lsc-core` with zero I/O imports.
 - Host physical throttling mandates `-j 2` across all local build steps.
