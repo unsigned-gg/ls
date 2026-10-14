@@ -10,7 +10,10 @@
 //! - `verify-signed <owner/repo> <pr>`: require GitHub-verified signatures on every PR commit.
 //! - `image-tags <ref> <sha>`: print the image tags a publish from that ref gets.
 //! - `package`: build the static musl `lsc` into `dist/lsc`.
+//! - `tools`, `fmt`, `fmt-check`, `clippy`, `test`, `doc-test`, `deny`, `typos`, `machete`,
+//!   `ci` and `install`: the gates of SPEC-0004 (see `gates.rs`).
 
+mod gates;
 mod release;
 mod stages;
 mod toolchain;
@@ -288,13 +291,30 @@ fn main() -> ExitCode {
         Some("verify-signed") => release::run_verify_signed(&rest),
         Some("image-tags") => release::run_image_tags(&root, &rest),
         Some("package") => release::run_package(&root),
-        _ => {
-            eprintln!(
-                "usage: cargo xtask <spec-check|projectfile-check|toolchain-check|xwork|stages-check|stages-gen|verify-signed|image-tags|package>"
-            );
-            ExitCode::from(2)
-        }
+        other => match other.and_then(gates::Gate::parse) {
+            Some(gate) => gates::run(&root, gate),
+            None => {
+                eprintln!("{}", usage());
+                ExitCode::from(2)
+            }
+        },
     }
+}
+
+/// The usage line: the repo's own commands, then the gates of SPEC-0004.
+fn usage() -> String {
+    let mut names = vec![
+        "spec-check",
+        "projectfile-check",
+        "xwork",
+        "stages-check",
+        "stages-gen",
+        "verify-signed",
+        "image-tags",
+        "package",
+    ];
+    names.extend(gates::Gate::ALL.iter().map(|g| g.name()));
+    format!("usage: cargo xtask <{}>", names.join("|"))
 }
 
 #[cfg(test)]
