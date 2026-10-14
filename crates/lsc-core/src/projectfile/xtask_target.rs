@@ -43,9 +43,10 @@ impl Default for XtaskTargetOptions {
     }
 }
 
-/// The dispatch-mode runner (SPEC-0003 requirements 9, 10). `@TARGET@`, `@IDENT@` and
-/// `@TABLE@` are replaced with the goal, its identifier and the stage table name.
-const DISPATCH_RUNNER: &str = r#"/// Execute the `@TARGET@` verification pipeline in topological DAG order.
+/// The dispatch-mode runner (SPEC-0003 requirements 9, 10). `@TARGET_DOC@` is replaced with
+/// the goal escaped for a doc comment, `@TARGET@` with the goal escaped for a format string,
+/// `@IDENT@` with its identifier and `@TABLE@` with the stage table name.
+const DISPATCH_RUNNER: &str = r#"/// Execute the `@TARGET_DOC@` verification pipeline in topological DAG order.
 ///
 /// `run_stage` runs one stage and returns its exit code. The first stage
 /// that does not succeed stops the pipeline. Then one summary line follows
@@ -125,8 +126,15 @@ impl XtaskCompiler {
         tools: &[(String, String, String)],
     ) -> String {
         let mut out = String::new();
-        let fn_ident = Self::sanitize_ident(&options.default_target);
-        let table = format!("{}_STAGES", fn_ident.to_ascii_uppercase());
+        let fn_ident = Self::sanitize_ident(&options.default_target).to_ascii_lowercase();
+        let upper = fn_ident.to_ascii_uppercase();
+        // A constant name cannot start with a digit; `run_<ident>` always can.
+        let table = if upper.starts_with(|c: char| c.is_ascii_digit()) {
+            format!("GOAL_{upper}_STAGES")
+        } else {
+            format!("{upper}_STAGES")
+        };
+        let target_doc = Self::literal_body(&options.default_target);
 
         if options.emit_preamble {
             out.push_str("// SPDX-License-Identifier: Apache-2.0 OR MIT\n");
@@ -194,15 +202,15 @@ impl XtaskCompiler {
         if options.dispatch {
             out.push_str(
                 &DISPATCH_RUNNER
-                    .replace("@TARGET@", &options.default_target)
+                    .replace("@TARGET_DOC@", &target_doc)
+                    .replace("@TARGET@", &target_doc.replace('{', "{{").replace('}', "}}"))
                     .replace("@IDENT@", &fn_ident)
                     .replace("@TABLE@", &table),
             );
             return out;
         }
         out.push_str(&format!(
-            "/// Execute the `{}` verification pipeline in topological DAG order.\n",
-            options.default_target
+            "/// Execute the `{target_doc}` verification pipeline in topological DAG order.\n"
         ));
         out.push_str(&format!(
             "pub fn run_{fn_ident}(root: &Path) -> ExitCode {{\n"
@@ -280,6 +288,13 @@ impl XtaskCompiler {
             }
             _ => Vec::new(),
         }
+    }
+
+    /// `raw` as the body of a Rust string literal: quotes, backslashes and control
+    /// characters escaped, without the surrounding quotes.
+    fn literal_body(raw: &str) -> String {
+        let quoted = format!("{raw:?}");
+        quoted[1..quoted.len() - 1].to_string()
     }
 
     fn sanitize_ident(raw: &str) -> String {
@@ -459,6 +474,32 @@ mod tests {
             "the noop table is not empty:\n{code}"
         );
         assert!(!code.contains("cargo-test"), "the flagged goal leaked in");
+    }
+
+    // SPEC-0003 requirement 11: a goal name reaches the generated code as data. Braces,
+    // quotes and a leading digit still give a module that compiles.
+    #[test]
+    fn goal_names_are_escaped_in_generated_code() {
+        let doc = sample_doc();
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&doc);
+        let named = |goal: &str| {
+            let opts = XtaskTargetOptions {
+                default_target: goal.to_string(),
+                ..dispatch()
+            };
+            XtaskCompiler::compile_from_doc(&doc, &resolved, &opts)
+        };
+        let braces = named("ci{x}\"");
+        assert!(
+            braces.contains(r#"format!("ci{{x}}\": not run {stage}")"#),
+            "format strings are not escaped:\n{braces}"
+        );
+        assert!(braces.contains("pub const CI_X___STAGES"), "{braces}");
+        let digit = named("2fa");
+        assert!(digit.contains("pub const GOAL_2FA_STAGES"), "{digit}");
+        assert!(digit.contains("pub fn run_2fa<F>("));
+        let upper = named("Install");
+        assert!(upper.contains("pub fn run_install<F>("), "{upper}");
     }
 
     // SPEC-0003 requirement 13: spawn mode drops the cargo run package variables.
