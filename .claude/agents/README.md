@@ -1,4 +1,4 @@
-# Subagent Gang & Contributor Collective — `unsigned-gg/ls`
+# Subagent Gang & Contributor Collective — `unsigned-gg/lsc`
 
 This directory defines the automated subagent personas and the contributor roster for the
 `ls` (LeanSpec Parser & AST Engine) repository.

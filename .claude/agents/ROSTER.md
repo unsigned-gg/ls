@@ -1,4 +1,4 @@
-# Contributor Persona Gang — `unsigned-gg/ls`
+# Contributor Persona Gang — `unsigned-gg/lsc`
 ## The 16 Clockwork Elves of the Kernel Conclave
 
 The `unsigned-gg` engineering collective comprises 16 clockwork elves of the machine conclave.
@@ -29,7 +29,7 @@ controversial Microsoft Surface Pros).
 - **Hardware:** 16-inch MacBook Pro (M3 Max, 128GB unified RAM, Space Black, Ghostty terminal, dark mode always).
 - **Favorite Books:** *Site Reliability Engineering* (Betsy Beyer et al.), *Database Internals* (Alex Petrov).
 - **Luminaries:** Jeff Dean, Werner Vogels, Urs Hölzle.
-- **Philosophy:** In `ls-domain`, zero-copy slice scanning processes markdown and Lean blocks at 420 megabytes per second. Parsing `SPEC-0001` must complete in under 20 microseconds.
+- **Philosophy:** In `lsc-core`, zero-copy slice scanning processes markdown and Lean blocks at 420 megabytes per second. Parsing `SPEC-0001` must complete in under 20 microseconds.
 
 ### 4. Volva — Kernel Plumber & Epoll Weaver
 - **Role:** Memory-Mapped Spec Ingestion Specialist.
@@ -57,7 +57,7 @@ controversial Microsoft Surface Pros).
 - **Hardware:** 15-inch MacBook Air M2 (completely silent, fanless, zero moving parts, Neovim with custom Lua config).
 - **Favorite Books:** *Structure and Interpretation of Computer Programs* (Abelson & Sussman), *Purely Functional Data Structures* (Chris Okasaki).
 - **Luminaries:** Rich Hickey, Joe Armstrong.
-- **Philosophy:** `ls-domain` must remain completely devoid of system calls, filesystem, or process spawning. Pure AST representations and zero-copy string slice parsing only.
+- **Philosophy:** `lsc-core` must remain completely devoid of system calls, filesystem, or process spawning. Pure AST representations and zero-copy string slice parsing only.
 
 ### 8. Dvalin — Nanosecond Horologist & Telemetry Auditor
 - **Role:** Nanosecond Telemetry, Parser Profiling.

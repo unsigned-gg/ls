@@ -10,7 +10,7 @@
 /// Filesystem scanner and CAS tree traversal engine.
 pub mod scanner;
 
-pub use ls_domain::*;
+pub use lsc_core::*;
 pub use scanner::{scan_cas_directory, scan_cas_path, scan_specs_dir, ScanResult};
 
 use std::fmt::Write;

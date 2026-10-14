@@ -1,5 +1,5 @@
 [package]
-name = "ls"
+name = "lsc"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -18,7 +18,7 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-ls-domain = { path = "../ls-domain" }
+lsc-core = { path = "../lsc-core" }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 

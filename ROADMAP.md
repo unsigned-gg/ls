@@ -1,12 +1,12 @@
 # ls — Architectural Roadmap
 
 > LeanSpec AST Parser, Structural Conformance Checker, and CAS Listing Engine  
-> Repo: `unsigned-gg/ls` · Formal Spec: [SPEC-0002-initial-roadmap.md](specs/SPEC-0002-initial-roadmap.md)
+> Repo: `unsigned-gg/lsc` · Formal Spec: [SPEC-0002-initial-roadmap.md](specs/SPEC-0002-initial-roadmap.md)
 
 ## Current State (Phase 1 — Complete)
 
-- **Formal Grammar & AST:** Fully deterministic LeanSpec document parser in `crates/ls-domain` ([SPEC-0001](specs/SPEC-0001-leanspec-ast.md)).
-- **Zero-I/O Domain Isolation:** `ls-domain` enforces zero I/O imports (`std::fs`, `std::net`, `std::process` forbidden).
+- **Formal Grammar & AST:** Fully deterministic LeanSpec document parser in `crates/lsc-core` ([SPEC-0001](specs/SPEC-0001-leanspec-ast.md)).
+- **Zero-I/O Domain Isolation:** `lsc-core` enforces zero I/O imports (`std::fs`, `std::net`, `std::process` forbidden).
 - **Architectural Rules R01–R16:** Enforces frontmatter integrity, line caps (<= 300 warn, <= 400 error), relative links, canonical section ordering, and theorem completeness.
 - **Content-Addressed Storage (CAS):** 256-bit BLAKE3 cryptographic hashing for individual documents and directory Merkle trees.
 - **Projectfile v1 Engine & CI DAG Lowering:** Zero-I/O §3.8 interpolation, `org.projectfile.ci` DAG resolver, `org.projectfile.image` variant tags, and `Justfile` lowering compiler ([SPEC-0003](specs/SPEC-0003-projectfile-ci-lowering.md)).

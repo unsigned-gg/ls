@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 
-use ls_domain::{
+use lsc_core::{
     compute_blake3_hash, parse_file_name, parse_spec, CasEntry, CasEntryType, CasListing,
     SpecDocument, ValidationMessage, ValidationReport,
 };
