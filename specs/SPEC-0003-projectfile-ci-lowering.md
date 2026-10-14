@@ -103,6 +103,7 @@ projectfile Engine Pipeline
 - [x] Implement `org.projectfile.ci` DAG resolver with cycle detection in `ci.rs`.
 - [x] Implement `org.projectfile.image` variant and head tag derivation in `image.rs`.
 - [x] Implement deterministic `Justfile` lowering compiler in `just_target.rs`.
+- [x] Add a dispatch mode to the xtask compiler: the generated runner takes a closure for each stage and spawns no process.
 - [x] Expose CLI subcommands (`ls pf interp`, `ci resolve`, `ci generate`, `image tags`).
 - [x] Validate 100% of specification conformance vectors (43 test fixtures).
 

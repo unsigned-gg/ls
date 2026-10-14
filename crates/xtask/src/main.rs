@@ -4,12 +4,15 @@
 //! - `spec-check`: run `lsc check specs/` on this repository's own specifications.
 //! - `projectfile-check`: run `lsc pf ci resolve projectfile.yaml` on this repository's projectfile.
 //! - `toolchain-check`: verify the active Rust matches `rust-toolchain.toml`.
-//! - `xwork`: run the full verification pipeline (`toolchain-check`, `spec-check`, `projectfile-check`, `zero-io-domain`, `fmt-check`, `clippy`, `test`, `doc-test`).
+//! - `xwork`: run the verification pipeline in the order `projectfile.yaml` gives (see `stages.rs`).
+//! - `stages-check`: fail if `stages.rs` differs from what `lsc` generates from `projectfile.yaml`.
+//! - `stages-gen`: rewrite `stages.rs` from `projectfile.yaml`.
 //! - `verify-signed <owner/repo> <pr>`: require GitHub-verified signatures on every PR commit.
 //! - `image-tags <ref> <sha>`: print the image tags a publish from that ref gets.
 //! - `package`: build the static musl `lsc` into `dist/lsc`.
 
 mod release;
+mod stages;
 mod toolchain;
 
 use std::env;
@@ -124,70 +127,151 @@ fn run_cargo(root: &Path, args: &[&str]) -> ExitCode {
     }
 }
 
-fn run_xwork(root: &Path) -> ExitCode {
-    let jobs = env::var("JOBS")
-        .or_else(|_| env::var("CARGO_BUILD_JOBS"))
-        .unwrap_or_else(|_| "2".to_string());
+/// How one `xwork` stage runs. Every stage the projectfile names needs an entry here.
+enum Action {
+    Toolchain,
+    SpecCheck,
+    ProjectfileCheck,
+    StagesCheck,
+    ZeroIo,
+    /// A cargo invocation; `{jobs}` is replaced by the job limit.
+    Cargo(&'static [&'static str]),
+}
 
-    println!("=== xwork: deterministic verification pipeline (jobs={jobs}) ===");
-
-    println!("xwork: [toolchain-check] running...");
-    if toolchain::run(root) != ExitCode::SUCCESS {
-        return ExitCode::FAILURE;
-    }
-
-    println!("xwork: [spec-check] running...");
-    if spec_check(root) != ExitCode::SUCCESS {
-        return ExitCode::FAILURE;
-    }
-
-    println!("xwork: [projectfile-check] running...");
-    if projectfile_check(root) != ExitCode::SUCCESS {
-        return ExitCode::FAILURE;
-    }
-
-    println!("xwork: [zero-io-domain] running...");
-    if let Err(err) = verify_zero_io_domain(root) {
-        eprintln!("zero-io-domain: {err}");
-        return ExitCode::FAILURE;
-    }
-    println!("zero-io-domain: ok (crates/ls-domain/src has zero I/O imports)");
-
-    println!("xwork: [fmt-check] running...");
-    if run_cargo(root, &["fmt", "--all", "--", "--check"]) != ExitCode::SUCCESS {
-        return ExitCode::FAILURE;
-    }
-
-    println!("xwork: [clippy] running...");
-    if run_cargo(
-        root,
-        &[
+fn action_for(stage: &str) -> Option<Action> {
+    Some(match stage {
+        "toolchain-check" => Action::Toolchain,
+        "spec-check" => Action::SpecCheck,
+        "projectfile-check" => Action::ProjectfileCheck,
+        "stages-check" => Action::StagesCheck,
+        "zero-io-domain" => Action::ZeroIo,
+        "cargo-fmt" => Action::Cargo(&["fmt", "--all", "--", "--check"]),
+        "cargo-clippy" => Action::Cargo(&[
             "clippy",
             "--workspace",
             "--all-targets",
             "-j",
-            &jobs,
+            "{jobs}",
             "--",
             "-D",
             "warnings",
-        ],
-    ) != ExitCode::SUCCESS
-    {
-        return ExitCode::FAILURE;
-    }
+        ]),
+        "cargo-test" => Action::Cargo(&["test", "--workspace", "-j", "{jobs}"]),
+        "cargo-doc-test" => Action::Cargo(&["test", "--doc", "--workspace", "-j", "{jobs}"]),
+        _ => return None,
+    })
+}
 
-    println!("xwork: [test] running...");
-    if run_cargo(root, &["test", "--workspace", "-j", &jobs]) != ExitCode::SUCCESS {
-        return ExitCode::FAILURE;
+fn run_stage(root: &Path, stage: &str, _args: &[&str]) -> ExitCode {
+    let jobs = env::var("JOBS")
+        .or_else(|_| env::var("CARGO_BUILD_JOBS"))
+        .unwrap_or_else(|_| stages::DEFAULT_JOBS.to_string());
+    match action_for(stage) {
+        Some(Action::Toolchain) => toolchain::run(root),
+        Some(Action::SpecCheck) => spec_check(root),
+        Some(Action::ProjectfileCheck) => projectfile_check(root),
+        Some(Action::StagesCheck) => stages_check(root),
+        Some(Action::ZeroIo) => match verify_zero_io_domain(root) {
+            Ok(()) => {
+                println!("zero-io-domain: ok (crates/ls-domain/src has zero I/O imports)");
+                ExitCode::SUCCESS
+            }
+            Err(err) => {
+                eprintln!("zero-io-domain: {err}");
+                ExitCode::FAILURE
+            }
+        },
+        Some(Action::Cargo(args)) => {
+            let args: Vec<String> = args.iter().map(|a| a.replace("{jobs}", &jobs)).collect();
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            run_cargo(root, &args)
+        }
+        None => {
+            eprintln!("xwork: projectfile stage `{stage}` has no implementation in xtask");
+            ExitCode::FAILURE
+        }
     }
+}
 
-    println!("xwork: [doc-test] running...");
-    if run_cargo(root, &["test", "--doc", "--workspace", "-j", &jobs]) != ExitCode::SUCCESS {
-        return ExitCode::FAILURE;
+fn run_xwork(root: &Path) -> ExitCode {
+    println!("=== xwork: verification pipeline in projectfile.yaml order ===");
+    let code = stages::run_xwork(root, run_stage);
+    if code == ExitCode::SUCCESS {
+        println!("=== xwork: all stages PASSED ===");
     }
+    code
+}
 
-    println!("=== xwork: all stages PASSED ===");
-    ExitCode::SUCCESS
+/// What `lsc` generates from `projectfile.yaml`, or `None` after printing why it could not.
+fn generated_stages(root: &Path) -> Option<Vec<u8>> {
+    let out = Command::new(env!("CARGO"))
+        .args([
+            "run",
+            "-q",
+            "-p",
+            "ls",
+            "-j",
+            "2",
+            "--",
+            "pf",
+            "ci",
+            "generate",
+            "projectfile.yaml",
+            "--target",
+            "xtask",
+            "--dispatch",
+        ])
+        .current_dir(root)
+        .output();
+    match out {
+        Ok(o) if o.status.success() => Some(o.stdout),
+        Ok(o) => {
+            eprintln!(
+                "stages: lsc failed: {}",
+                String::from_utf8_lossy(&o.stderr).trim()
+            );
+            None
+        }
+        Err(err) => {
+            eprintln!("stages: cannot run cargo: {err}");
+            None
+        }
+    }
+}
+
+fn stages_check(root: &Path) -> ExitCode {
+    let Some(generated) = generated_stages(root) else {
+        return ExitCode::FAILURE;
+    };
+    match fs::read(root.join("crates/xtask/src/stages.rs")) {
+        Ok(current) if current == generated => {
+            println!("stages-check: ok (stages.rs matches projectfile.yaml)");
+            ExitCode::SUCCESS
+        }
+        Ok(_) => {
+            eprintln!(
+                "stages-check: crates/xtask/src/stages.rs is out of date; run `cargo xtask stages-gen`"
+            );
+            ExitCode::FAILURE
+        }
+        Err(err) => {
+            eprintln!("stages-check: cannot read stages.rs: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn stages_gen(root: &Path) -> ExitCode {
+    let Some(generated) = generated_stages(root) else {
+        return ExitCode::FAILURE;
+    };
+    match fs::write(root.join("crates/xtask/src/stages.rs"), generated) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(err) => {
+            eprintln!("stages-gen: cannot write stages.rs: {err}");
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn main() -> ExitCode {
@@ -199,12 +283,14 @@ fn main() -> ExitCode {
         Some("projectfile-check") => projectfile_check(&root),
         Some("toolchain-check") => toolchain::run(&root),
         Some("xwork") => run_xwork(&root),
+        Some("stages-check") => stages_check(&root),
+        Some("stages-gen") => stages_gen(&root),
         Some("verify-signed") => release::run_verify_signed(&rest),
         Some("image-tags") => release::run_image_tags(&root, &rest),
         Some("package") => release::run_package(&root),
         _ => {
             eprintln!(
-                "usage: cargo xtask <spec-check|projectfile-check|toolchain-check|xwork|verify-signed|image-tags|package>"
+                "usage: cargo xtask <spec-check|projectfile-check|toolchain-check|xwork|stages-check|stages-gen|verify-signed|image-tags|package>"
             );
             ExitCode::from(2)
         }
@@ -214,6 +300,21 @@ fn main() -> ExitCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_projectfile_stage_has_an_implementation() {
+        for &(stage, _) in stages::XWORK_STAGES {
+            assert!(
+                action_for(stage).is_some(),
+                "no implementation for `{stage}`"
+            );
+        }
+    }
+
+    #[test]
+    fn unknown_stage_has_no_implementation() {
+        assert!(action_for("no-such-stage").is_none());
+    }
 
     #[test]
     fn ls_domain_is_free_of_io() {
