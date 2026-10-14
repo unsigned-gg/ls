@@ -1,4 +1,4 @@
-# Contributor Persona Gang — `unsigned-gg/ls`
+# Contributor Persona Gang — `unsigned-gg/lsc`
 ## The 16 Clockwork Elves of the Kernel Conclave
 
 The `unsigned-gg` engineering collective comprises 16 clockwork elves of the machine conclave.

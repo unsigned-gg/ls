@@ -1,7 +1,7 @@
 # ls — Architectural Roadmap
 
 > LeanSpec AST Parser, Structural Conformance Checker, and CAS Listing Engine  
-> Repo: `unsigned-gg/ls` · Formal Spec: [SPEC-0002-initial-roadmap.md](specs/SPEC-0002-initial-roadmap.md)
+> Repo: `unsigned-gg/lsc` · Formal Spec: [SPEC-0002-initial-roadmap.md](specs/SPEC-0002-initial-roadmap.md)
 
 ## Current State (Phase 1 — Complete)
 
