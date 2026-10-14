@@ -6,3 +6,5 @@ target/
 Cargo.lock
 .agents/persona.md
 dist/
+# Pinned gate tools that `cargo xtask tools` installs (SPEC-0004, XT-3)
+/.tools/
