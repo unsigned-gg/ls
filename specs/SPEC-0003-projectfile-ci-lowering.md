@@ -28,6 +28,7 @@ depends_on: [SPEC-0001-leanspec-ast]
 15. Where `gg.unsigned.ls.run` gives a command line for a stage, the compiler shall emit that command line for the stage in the `Justfile` and in spawn mode, instead of the stage name.
 16. The compiler shall lower a resolved CI intent DAG into a GitHub Actions job that runs `cargo xtask <goal>`.
 17. Where a node gives `needs` as a YAML sequence, the CI engine shall keep the tools of that node in sequence order.
+18. The `lsc-core` library shall lower projectfile text into the `xtask` module in one call, with the same output and the same rejection codes as `lsc pf ci generate --target xtask`.
 
 ```lean
 namespace Unsigned.Projectfile
@@ -123,6 +124,7 @@ projectfile Engine Pipeline
 - [ ] Requirement 15: `gg.unsigned.ls.run` command lines (`just_target.rs`, `xtask_target.rs`).
 - [ ] Requirement 16: GitHub Actions lowering (new `gha_target.rs`).
 - [ ] Requirement 17: sequence order inside a node (`ci.rs`; the upstream vectors treat `runs` as a set, so this is an ls choice).
+- [x] Requirement 18: `XtaskCompiler::generate` in `lsc-core`, which `lsc pf ci generate` calls for the `xtask` target (`xtask_target.rs`, `main.rs`).
 
 ## Verification
 
