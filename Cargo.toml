@@ -12,7 +12,7 @@ edition = "2021"
 version = "0.1.0"
 rust-version = "1.85"
 publish = false
-license = "Apache-2.0 OR MIT OR CC0-1.0"
+license = "Apache-2.0 OR MIT"
 authors = ["Christian M. Todie <chris@todie.io>"]
 repository = "https://github.com/unsigned-gg/ls"
 

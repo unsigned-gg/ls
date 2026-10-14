@@ -4,7 +4,7 @@
 
 > **LeanSpec AST Parser, Structural Conformance Checker, and CAS Listing Engine**  
 > Fast, deterministic specification parsing, Lean 4 theorem AST extraction, validation rules (R01–R16), and BLAKE3 Content-Addressed Storage listing.  
-> Tri-licensed under `Apache-2.0 OR MIT OR CC0-1.0`.
+> Dual-licensed under `Apache-2.0 OR MIT`.
 
 ## Architectural Invariants & Machine Sympathy
 - **Substantive Systems Implementation:** Fully functional LeanSpec parser and validation rule engine with zero vanity stubs.
@@ -88,10 +88,9 @@ make smoke
 - Elf Conclave Transcript: [2026-10-11-ls-formal-ast.irc](sessions/2026-10-11-ls-formal-ast.irc)
 
 ## License
-Tri-licensed under either of:
+Dual-licensed under either of:
 - Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
 - MIT License ([LICENSE-MIT](LICENSE-MIT))
-- Creative Commons Zero 1.0 Universal ([LICENSE-CC0](LICENSE-CC0))
 
 ## Principles
 
