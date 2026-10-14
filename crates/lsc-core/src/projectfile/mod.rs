@@ -23,4 +23,4 @@ pub use interp::{
     find_references, find_spans, ProjectfileInterpolator, ReferenceSpan, TemplateSpan,
 };
 pub use just_target::{JustTargetOptions, JustfileCompiler};
-pub use xtask_target::{XtaskCompiler, XtaskTargetOptions};
+pub use xtask_target::{XtaskCompiler, XtaskGenerateError, XtaskTargetOptions};

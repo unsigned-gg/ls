@@ -12,8 +12,9 @@
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+use std::fmt;
 
-use super::ci::CiResolveResult;
+use super::ci::{CiResolveResult, CiResolver};
 
 /// Configuration options for Rust `xtask` code generation.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -42,6 +43,45 @@ impl Default for XtaskTargetOptions {
         }
     }
 }
+
+/// Why projectfile text could not be lowered to an `xtask` module (SPEC-0003 requirement 18).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum XtaskGenerateError {
+    /// The text is not valid YAML. Carries the parser message.
+    Parse(String),
+    /// The CI engine rejected the DAG with this code, such as `cycle` or `unknown-goal`.
+    Rejected(String),
+    /// These `gg.unsigned.ls.tools` rows lack a string `crate`, `version` or `bin`.
+    IncompleteTools(Vec<String>),
+}
+
+impl XtaskGenerateError {
+    /// The stable error code: `parse`, the CI engine's code, or `incomplete-tool`.
+    #[must_use]
+    pub fn code(&self) -> &str {
+        match self {
+            Self::Parse(_) => "parse",
+            Self::Rejected(code) => code,
+            Self::IncompleteTools(_) => "incomplete-tool",
+        }
+    }
+}
+
+impl fmt::Display for XtaskGenerateError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Parse(msg) => write!(f, "cannot parse YAML: {msg}"),
+            Self::Rejected(code) => write!(f, "DAG rejected with code: '{code}'"),
+            Self::IncompleteTools(rows) => write!(
+                f,
+                "DAG rejected with code: 'incomplete-tool' (gg.unsigned.ls.tools: {}; each row needs string crate, version and bin)",
+                rows.join(", ")
+            ),
+        }
+    }
+}
+
+impl std::error::Error for XtaskGenerateError {}
 
 /// The dispatch-mode runner (SPEC-0003 requirements 9, 10). `@TARGET_DOC@` is replaced with
 /// the goal escaped for a doc comment, `@TARGET@` with the goal escaped for a format string,
@@ -261,6 +301,48 @@ impl XtaskCompiler {
     ) -> String {
         let tools = Self::tools_from_doc(doc);
         Self::compile_with_tools(resolved, options, &tools)
+    }
+
+    /// Lowers projectfile text to a Rust `xtask` module in one call (SPEC-0003
+    /// requirement 18), for a host `xtask` that depends on this crate.
+    ///
+    /// The CI section is `org.projectfile.ci`, or the whole document when that key is
+    /// absent. With `goal`, only that node's needs closure is lowered and the stage table
+    /// and runner take its name, as `lsc pf ci generate --goal` does. Without it, the
+    /// `goal: true` nodes are lowered under `options.default_target`.
+    ///
+    /// # Errors
+    ///
+    /// [`XtaskGenerateError`] when the text is not YAML, the CI engine rejects the DAG,
+    /// or a `gg.unsigned.ls.tools` row is incomplete.
+    pub fn generate(
+        projectfile: &str,
+        goal: Option<&str>,
+        options: &XtaskTargetOptions,
+    ) -> Result<String, XtaskGenerateError> {
+        let doc: Value = serde_yaml::from_str(projectfile)
+            .map_err(|err| XtaskGenerateError::Parse(err.to_string()))?;
+        let ci = doc
+            .get("org")
+            .and_then(|o| o.get("projectfile"))
+            .and_then(|p| p.get("ci"))
+            .unwrap_or(&doc);
+        let resolved = match goal {
+            Some(node) => CiResolver::resolve_goal(ci, node),
+            None => CiResolver::resolve_fixture(ci),
+        };
+        if let Some(code) = &resolved.reject {
+            return Err(XtaskGenerateError::Rejected(code.clone()));
+        }
+        let incomplete = Self::incomplete_tools(&doc);
+        if !incomplete.is_empty() {
+            return Err(XtaskGenerateError::IncompleteTools(incomplete));
+        }
+        let mut options = options.clone();
+        if let Some(node) = goal {
+            options.default_target = node.to_string();
+        }
+        Ok(Self::compile_from_doc(&doc, &resolved, &options))
     }
 
     /// The rows of `gg.unsigned.ls.tools` in name order (SPEC-0003 requirement 14).
@@ -532,6 +614,84 @@ mod tests {
         });
         assert_eq!(XtaskCompiler::incomplete_tools(&doc), vec!["bare", "typo"]);
         assert!(XtaskCompiler::incomplete_tools(&sample_doc()).is_empty());
+    }
+
+    const PROJECTFILE: &str = "
+org:
+  projectfile:
+    ci:
+      nodes:
+        formatted:
+          needs: { cargo-fmt: true }
+        check:
+          goal: true
+          needs: { formatted: true, cargo-test: true }
+        install:
+          needs: { check: true, cargo-build: true }
+";
+
+    // SPEC-0003 requirement 18: one call lowers projectfile text, as the CLI does.
+    #[test]
+    fn generate_lowers_projectfile_text() {
+        let code = XtaskCompiler::generate(PROJECTFILE, None, &dispatch()).expect("lowers");
+        assert!(code.contains("pub const XWORK_STAGES"), "{code}");
+        let fmt = code.find("(\"cargo-fmt\"").expect("cargo-fmt stage");
+        let test = code.find("(\"cargo-test\"").expect("cargo-test stage");
+        assert!(fmt < test, "stages are out of order:\n{code}");
+        assert!(
+            !code.contains("cargo-build"),
+            "install is not a flagged goal"
+        );
+    }
+
+    // SPEC-0003 requirement 18: generate matches the two-step API it wraps.
+    #[test]
+    fn generate_matches_resolve_then_compile() {
+        let doc: Value = serde_yaml::from_str(PROJECTFILE).expect("yaml");
+        let ci = &doc["org"]["projectfile"]["ci"];
+        let resolved = super::super::ci::CiResolver::resolve_fixture(ci);
+        let two_step = XtaskCompiler::compile_from_doc(&doc, &resolved, &dispatch());
+        let one_call = XtaskCompiler::generate(PROJECTFILE, None, &dispatch()).expect("lowers");
+        assert_eq!(one_call, two_step);
+    }
+
+    // SPEC-0003 requirements 11 and 18: a goal names the table and narrows the closure.
+    #[test]
+    fn generate_with_a_goal_lowers_that_closure() {
+        let code =
+            XtaskCompiler::generate(PROJECTFILE, Some("install"), &dispatch()).expect("lowers");
+        assert!(code.contains("pub const INSTALL_STAGES"), "{code}");
+        assert!(code.contains("pub fn run_install<F>("));
+        assert!(code.contains("(\"cargo-build\""));
+    }
+
+    // SPEC-0003 requirements 12 and 18: errors carry the engine's codes.
+    #[test]
+    fn generate_errors_carry_codes() {
+        let unknown = XtaskCompiler::generate(PROJECTFILE, Some("nope"), &dispatch());
+        assert_eq!(
+            unknown,
+            Err(XtaskGenerateError::Rejected("unknown-goal".to_string()))
+        );
+        assert_eq!(unknown.unwrap_err().code(), "unknown-goal");
+
+        let parse = XtaskCompiler::generate("org: [unclosed", None, &dispatch());
+        assert!(
+            matches!(parse, Err(XtaskGenerateError::Parse(_))),
+            "{parse:?}"
+        );
+
+        let pins = format!(
+            "{PROJECTFILE}gg:\n  unsigned:\n    ls:\n      tools:\n        nextest: {{ crate: cargo-nextest, bin: cargo-nextest }}\n"
+        );
+        let incomplete = XtaskCompiler::generate(&pins, None, &dispatch());
+        assert_eq!(
+            incomplete,
+            Err(XtaskGenerateError::IncompleteTools(vec![
+                "nextest".to_string()
+            ]))
+        );
+        assert_eq!(incomplete.unwrap_err().code(), "incomplete-tool");
     }
 
     // SPEC-0003 requirement 13: spawn mode drops the cargo run package variables.

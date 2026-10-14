@@ -351,6 +351,30 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                             return ExitCode::FAILURE;
                         }
                     };
+                    // SPEC-0003 requirement 18: the xtask target goes through the library
+                    // entry point, so the CLI and a host xtask lower the same way.
+                    if matches!(target, "xtask" | "rust") {
+                        let options = lsc::XtaskTargetOptions {
+                            dispatch,
+                            ..lsc::XtaskTargetOptions::default()
+                        };
+                        return match lsc::XtaskCompiler::generate(&content, goal, &options) {
+                            Ok(out) => {
+                                print!("{out}");
+                                ExitCode::SUCCESS
+                            }
+                            Err(lsc::XtaskGenerateError::Parse(err)) => {
+                                eprintln!(
+                                    "lsc pf ci generate: cannot parse YAML in '{file_path}': {err}"
+                                );
+                                ExitCode::FAILURE
+                            }
+                            Err(err) => {
+                                eprintln!("lsc pf ci generate: {err}");
+                                ExitCode::FAILURE
+                            }
+                        };
+                    }
                     let val: serde_json::Value = match serde_yaml::from_str(&content) {
                         Ok(v) => v,
                         Err(err) => {
@@ -392,18 +416,6 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         return ExitCode::FAILURE;
                     }
                     match target {
-                        "xtask" | "rust" => {
-                            let defaults = lsc::XtaskTargetOptions::default();
-                            let options = lsc::XtaskTargetOptions {
-                                dispatch,
-                                default_target: goal
-                                    .map_or(defaults.default_target.clone(), str::to_string),
-                                ..defaults
-                            };
-                            let out = lsc::XtaskCompiler::compile_from_doc(&val, &res, &options);
-                            print!("{out}");
-                            ExitCode::SUCCESS
-                        }
                         "just" | "justfile" => {
                             let options = lsc::JustTargetOptions::default();
                             let out =
