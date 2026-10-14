@@ -8,15 +8,15 @@
 
 ## Architectural Invariants & Machine Sympathy
 - **Substantive Systems Implementation:** Fully functional LeanSpec parser and validation rule engine with zero vanity stubs.
-- **Zero-I/O Domain Isolation:** `ls-domain` has zero dependencies on `std::fs`, `std::net`, `std::process`, or async runtimes. All AST models, frontmatter parsing, theorem parsing, and rule validations operate on pure memory buffers.
+- **Zero-I/O Domain Isolation:** `lsc-core` has zero dependencies on `std::fs`, `std::net`, `std::process`, or async runtimes. All AST models, frontmatter parsing, theorem parsing, and rule validations operate on pure memory buffers.
 - **Controlled Language & Verification:** Built for ASD-STE100 technical precision and deterministic build verification.
 - **Content-Addressed Storage (CAS):** 256-bit BLAKE3 cryptographic hashing for specification documents, theorem bodies, and directory trees.
 
 ## Crate Layout
 | Crate | Responsibility |
 |---|---|
-| `crates/ls-domain` | Pure zero-I/O LeanSpec AST types, Lean 4 theorem statements, frontmatter parser, BLAKE3 CAS algorithms, and rule validators (R01–R16). |
-| `crates/ls` | CLI binary (`lsc`) and filesystem scanner for specification suites (`lsc check`, `lsc hash`, `lsc list`, `lsc parse`, `lsc theorems`). |
+| `crates/lsc-core` | Pure zero-I/O LeanSpec AST types, Lean 4 theorem statements, frontmatter parser, BLAKE3 CAS algorithms, and rule validators (R01–R16). |
+| `crates/lsc` | CLI binary (`lsc`) and filesystem scanner for specification suites (`lsc check`, `lsc hash`, `lsc list`, `lsc parse`, `lsc theorems`). |
 
 ## CLI Usage
 

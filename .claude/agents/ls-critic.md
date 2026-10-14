@@ -15,7 +15,7 @@ the diff, and run proving commands yourself. Your output is a strict verdict.
 
 ## Check Order
 1. **Rule Engine Soundness:** Verify rules R01-R13 evaluate accurately without false positives or silent bypasses.
-2. **Zero-I/O Domain Boundary:** Verify `ls-domain` has zero `std::fs`, `std::net`, `std::process`, or async dependencies.
+2. **Zero-I/O Domain Boundary:** Verify `lsc-core` has zero `std::fs`, `std::net`, `std::process`, or async dependencies.
 3. **Unsafe Inspection:** Workspace strictly forbids `unsafe`. Verify no `unsafe` blocks exist.
 4. **Test Soundness:** Verify tests evaluate against real LeanSpec documents (e.g. `uas/specs`).
 5. **Host Throttling:** Confirm all test commands run with `-j 2`.

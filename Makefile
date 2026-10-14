@@ -59,8 +59,8 @@ audit: ## Check dependencies for known advisories
 
 smoke: ## Build CLI/library and verify domain crate has zero I/O
 	cargo build --workspace -j $(JOBS)
-	@if grep -rnE 'std::net|std::fs|tokio|std::process' crates/ls-domain/src; then \
-		echo "smoke: ls-domain must not use I/O" >&2; \
+	@if grep -rnE 'std::net|std::fs|tokio|std::process' crates/lsc-core/src; then \
+		echo "smoke: lsc-core must not use I/O" >&2; \
 		exit 1; \
 	fi; \
 	echo "smoke: ok"

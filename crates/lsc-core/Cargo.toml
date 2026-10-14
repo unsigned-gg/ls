@@ -1,5 +1,5 @@
 [package]
-name = "ls-domain"
+name = "lsc-core"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
