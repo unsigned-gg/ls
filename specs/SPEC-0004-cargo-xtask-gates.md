@@ -39,8 +39,9 @@ Makefile and the existing CI jobs. Nothing is removed.
    step failed.
 8. **XT-8 (event-driven):** When `install` runs, xtask shall run `ci`, then
    `cargo build --release --workspace --exclude xtask --bins -j N`.
-9. **XT-9 (event-driven):** When CI runs for a push or a pull request, the job `xtask-ci` shall run
-   `cargo xtask ci` on `ubuntu-latest`, the runner the existing Rust jobs use.
+9. **XT-9 (event-driven):** When CI runs for a push or a pull request that changes a Rust, Cargo,
+   spec or CI path, or any Markdown file, the job `xtask-ci` shall run `cargo xtask ci` on
+   `ubuntu-latest`, the runner the existing Rust jobs use.
 
 ## Design
 
@@ -63,8 +64,8 @@ The code is `crates/xtask/src/gates.rs`. `.tools/` is gitignored.
 ## Tasks
 
 - [x] Write the clauses XT-1 to XT-9.
-- [ ] Add unit tests named for the clauses, red first, then the gates (XT-1 to XT-8).
-- [ ] Add the CI job `xtask-ci` (XT-9).
+- [x] Add unit tests named for the clauses, red first, then the gates (XT-1 to XT-8).
+- [x] Add the CI job `xtask-ci` (XT-9).
 
 ## Verification
 
@@ -75,5 +76,6 @@ cargo xtask ci
 
 ## Notes
 
-- `cargo xtask ci` needs only cargo and rustup.
+- `cargo xtask ci` needs cargo, rustup and a C compiler. The first run also needs network access to
+  crates.io and rustup to build the pinned tools, and `deny` fetches the RustSec advisory database.
 - The make target `smoke` and the `xwork` pipeline are unchanged.
