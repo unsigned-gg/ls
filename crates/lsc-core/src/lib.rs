@@ -29,8 +29,9 @@ pub use lean::{
 };
 pub use projectfile::{
     compute_matrix_cells, find_references, find_spans, normalize_needs, CiMatrixDef, CiNeedOption,
-    CiNode, CiResolveResult, CiResolver, ImageCellResult, ImageResolveResult, ImageResolver,
-    JustTargetOptions, JustfileCompiler, ProjectfileInterpolator, ReferenceSpan, TemplateSpan,
-    XtaskCompiler, XtaskGenerateError, XtaskTargetOptions,
+    CiNode, CiResolveResult, CiResolver, GhaCompiler, GhaTargetOptions, ImageCellResult,
+    ImageResolveResult, ImageResolver, JustTargetOptions, JustfileCompiler,
+    ProjectfileInterpolator, ReferenceSpan, TemplateSpan, XtaskCompiler, XtaskGenerateError,
+    XtaskTargetOptions,
 };
 pub use rules::{parse_file_name, parse_spec, LEGACY_SECTIONS, MODERN_SECTIONS};

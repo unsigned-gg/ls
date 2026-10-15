@@ -48,6 +48,14 @@ impl JustfileCompiler {
     /// Compiles a resolved CI execution plan into a standalone Justfile.
     #[must_use]
     pub fn compile(resolved: &CiResolveResult, options: &JustTargetOptions) -> String {
+        Self::compile_with_runs(resolved, options, &BTreeMap::new())
+    }
+
+    fn compile_with_runs(
+        resolved: &CiResolveResult,
+        options: &JustTargetOptions,
+        runs: &BTreeMap<String, String>,
+    ) -> String {
         let mut out = String::new();
 
         if options.emit_preamble {
@@ -116,10 +124,11 @@ impl JustfileCompiler {
             out.push_str(&format!("# Tool target (timing class count: {count})\n"));
             out.push_str(&format!("{tool}:{dep_str}\n"));
 
+            let cmd = runs.get(tool).map_or(tool.as_str(), String::as_str);
             if let Some(args) = resolved.args.get(tool) {
-                out.push_str(&format!("    {tool} {args}\n\n"));
+                out.push_str(&format!("    {cmd} {args}\n\n"));
             } else {
-                out.push_str(&format!("    {tool}\n\n"));
+                out.push_str(&format!("    {cmd}\n\n"));
             }
         }
 
@@ -133,6 +142,20 @@ impl JustfileCompiler {
         resolved: &CiResolveResult,
         options: &JustTargetOptions,
     ) -> String {
+        let runs = super::xtask_target::XtaskCompiler::runs_from_doc(doc);
+        let ci_section = doc
+            .get("org")
+            .and_then(|o| o.get("projectfile"))
+            .and_then(|p| p.get("ci"))
+            .or_else(|| doc.get("input"))
+            .unwrap_or(doc);
+        let input_val = ci_section.get("input").unwrap_or(ci_section);
+        let nodes_obj = input_val.get("nodes").and_then(|n| n.as_object());
+
+        let Some(nodes) = nodes_obj else {
+            return Self::compile_with_runs(resolved, options, &runs);
+        };
+
         let mut out = String::new();
 
         if options.emit_preamble {
@@ -147,78 +170,107 @@ impl JustfileCompiler {
 
         out.push_str(&format!("default: {}\n\n", options.default_target));
 
-        let input_val = doc.get("input").unwrap_or(doc);
-        let nodes_obj = input_val.get("nodes").and_then(|n| n.as_object());
+        // High-level node recipes
+        let mut goal_nodes = Vec::new();
 
-        if let Some(nodes) = nodes_obj {
-            // High-level node recipes
-            let mut goal_nodes = Vec::new();
-
-            for (name, node_val) in nodes {
-                let is_goal = node_val.get("goal").and_then(|g| g.as_bool()) == Some(true);
-                if is_goal {
-                    goal_nodes.push(name.as_str());
-                }
-
-                let mut node_prereqs = Vec::new();
-                let mut tool_invocations = Vec::new();
-
-                if let Some(needs_obj) = node_val.get("needs").and_then(|n| n.as_object()) {
-                    for (dep, opt) in needs_obj {
-                        let enabled = match opt {
-                            Value::Bool(b) => *b,
-                            Value::Null => false,
-                            _ => true,
-                        };
-                        if !enabled {
-                            continue;
-                        }
-
-                        if nodes.contains_key(dep) {
-                            node_prereqs.push(dep.as_str());
-                        } else {
-                            let arg = opt
-                                .as_object()
-                                .and_then(|o| o.get("args"))
-                                .and_then(|a| a.as_str())
-                                .unwrap_or("");
-                            if arg.is_empty() {
-                                tool_invocations.push(dep.clone());
-                            } else {
-                                tool_invocations.push(format!("{dep} {arg}"));
-                            }
-                        }
-                    }
-                }
-
-                let dep_str = if node_prereqs.is_empty() {
-                    String::new()
-                } else {
-                    format!(" {}", node_prereqs.join(" "))
-                };
-
-                out.push_str(&format!("# Node: {name}\n"));
-                out.push_str(&format!("{name}:{dep_str}\n"));
-                for cmd in tool_invocations {
-                    out.push_str(&format!("    {cmd}\n"));
-                }
-                out.push('\n');
+        for (name, node_val) in nodes {
+            let is_goal = node_val.get("goal").and_then(|g| g.as_bool()) == Some(true);
+            if is_goal {
+                goal_nodes.push(name.as_str());
             }
 
-            let ci_deps = if goal_nodes.is_empty() {
-                nodes.keys().map(String::as_str).collect::<Vec<_>>()
+            let mut node_prereqs = Vec::new();
+            let mut tool_invocations = Vec::new();
+
+            for (dep, opt) in super::ci::normalize_needs_ordered(node_val.get("needs")) {
+                if !opt.enabled {
+                    continue;
+                }
+
+                if nodes.contains_key(&dep) {
+                    node_prereqs.push(dep);
+                } else {
+                    let cmd = runs.get(&dep).map_or(dep.as_str(), String::as_str);
+                    let arg = opt
+                        .args
+                        .as_deref()
+                        .or_else(|| resolved.args.get(&dep).map(String::as_str))
+                        .unwrap_or("");
+                    if arg.is_empty() {
+                        tool_invocations.push(cmd.to_string());
+                    } else {
+                        tool_invocations.push(format!("{cmd} {arg}"));
+                    }
+                }
+            }
+
+            let dep_str = if node_prereqs.is_empty() {
+                String::new()
             } else {
-                goal_nodes
+                format!(" {}", node_prereqs.join(" "))
             };
-            out.push_str(&format!(
-                "{}: {}\n\n",
-                options.default_target,
-                ci_deps.join(" ")
-            ));
-        } else {
-            return Self::compile(resolved, options);
+
+            out.push_str(&format!("# Node: {name}\n"));
+            out.push_str(&format!("{name}:{dep_str}\n"));
+            for cmd in tool_invocations {
+                out.push_str(&format!("    {cmd}\n"));
+            }
+            out.push('\n');
         }
 
+        let ci_deps = if goal_nodes.is_empty() {
+            nodes.keys().map(String::as_str).collect::<Vec<_>>()
+        } else {
+            goal_nodes
+        };
+        out.push_str(&format!(
+            "{}: {}\n\n",
+            options.default_target,
+            ci_deps.join(" ")
+        ));
+
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    // SPEC-0003 requirement 15: gg.unsigned.ls.run replaces stage name with command line in Justfile recipes.
+    #[test]
+    fn run_section_gives_command_line_in_justfile() {
+        let ci_doc = json!({
+            "nodes": {
+                "lint": {
+                    "needs": {
+                        "fmt": { "args": "--check" }
+                    }
+                },
+                "verify": {
+                    "goal": true,
+                    "needs": ["lint", "test"]
+                }
+            }
+        });
+        let doc = json!({
+            "gg": { "unsigned": { "ls": { "run": {
+                "fmt": "cargo fmt --all",
+                "test": "cargo test --workspace"
+            } } } },
+            "org": { "projectfile": { "ci": ci_doc } }
+        });
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&ci_doc);
+        let justfile =
+            JustfileCompiler::compile_from_doc(&doc, &resolved, &JustTargetOptions::default());
+        assert!(
+            justfile.contains("    cargo fmt --all --check\n"),
+            "fmt command line missing:\n{justfile}"
+        );
+        assert!(
+            justfile.contains("    cargo test --workspace\n"),
+            "test command line missing:\n{justfile}"
+        );
     }
 }

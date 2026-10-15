@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-12
 tags: [projectfile, ci-compiler, interpolation, image-tags, justfile, zero-io]
 priority: critical
@@ -121,9 +121,9 @@ projectfile Engine Pipeline
 - [x] Requirements 11 and 12: `--goal` and `unknown-goal` (`ci.rs`, `xtask_target.rs`, `lsc`).
 - [x] Requirement 13: environment scrub in spawn mode (`xtask_target.rs`).
 - [x] Requirement 14: `TOOLS` table from `gg.unsigned.ls.tools` (`xtask_target.rs`).
-- [ ] Requirement 15: `gg.unsigned.ls.run` command lines (`just_target.rs`, `xtask_target.rs`).
-- [ ] Requirement 16: GitHub Actions lowering (new `gha_target.rs`).
-- [ ] Requirement 17: sequence order inside a node (`ci.rs`; the upstream vectors treat `runs` as a set, so this is an ls choice).
+- [x] Requirement 15: `gg.unsigned.ls.run` command lines (`just_target.rs`, `xtask_target.rs`).
+- [x] Requirement 16: GitHub Actions lowering (new `gha_target.rs`).
+- [x] Requirement 17: sequence order inside a node (`ci.rs`; the upstream vectors treat `runs` as a set, so this is an ls choice).
 - [x] Requirement 18: `XtaskCompiler::generate` in `lsc-core`, which `lsc pf ci generate` calls for the `xtask` target (`xtask_target.rs`, `main.rs`).
 
 ## Verification
