@@ -23,6 +23,10 @@ links:
     url: https://github.com/unsigned-gg/lsc
   - type: bugs
     url: https://github.com/unsigned-gg/lsc/issues
+  - type: specification
+    url: https://www.lean-spec.dev/
+    label:
+      en: "LeanSpec, the spec methodology lsc's format builds on"
 
 license:
   spdx: Apache-2.0 OR MIT

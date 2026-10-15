@@ -4,6 +4,7 @@
 
 > **LeanSpec AST Parser, Structural Conformance Checker, and CAS Listing Engine**  
 > Fast, deterministic specification parsing, Lean 4 theorem AST extraction, validation rules (R01–R16), and BLAKE3 Content-Addressed Storage listing.  
+> The spec format builds on [LeanSpec](https://www.lean-spec.dev/), a lightweight spec methodology for AI-powered development, and adds Lean 4 theorem blocks.  
 > Dual-licensed under `Apache-2.0 OR MIT`.
 
 ## Architectural Invariants & Machine Sympathy
