@@ -12,6 +12,7 @@ pub mod cas;
 pub mod document;
 pub mod lean;
 pub mod projectfile;
+pub mod receipt;
 pub mod rules;
 
 pub use cas::{
@@ -33,5 +34,10 @@ pub use projectfile::{
     ImageResolveResult, ImageResolver, JustTargetOptions, JustfileCompiler,
     ProjectfileInterpolator, ReferenceSpan, TemplateSpan, XtaskCompiler, XtaskGenerateError,
     XtaskTargetOptions,
+};
+pub use receipt::{
+    parse_libtest_counts, LibtestCounts, ReceiptCacheState, ReceiptResult, ValidationGateReceipt,
+    ValidationReceipt, ValidityFingerprint, ValidityInput, ValidityInputKind, ValidityStrength,
+    VALIDATION_RECEIPT_SCHEMA_VERSION, VALIDITY_FINGERPRINT_SCHEMA_VERSION,
 };
 pub use rules::{parse_file_name, parse_spec, LEGACY_SECTIONS, MODERN_SECTIONS};
