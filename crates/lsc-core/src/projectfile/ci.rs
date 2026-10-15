@@ -38,6 +38,9 @@ pub struct CiNeedOption {
 pub struct CiNode {
     /// Dependencies (tools or other nodes).
     pub needs: BTreeMap<String, CiNeedOption>,
+    /// Declared order of dependencies, preserving sequence order when `needs` is a YAML sequence.
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
+    pub needs_order: Vec<String>,
     /// Explicit goal flag.
     pub goal: Option<bool>,
     /// Matrix cell fan-out flag.
@@ -77,33 +80,33 @@ impl CiResolveResult {
     }
 }
 
-/// Normalizes a `needs` field from string, array, or object into a map.
-pub fn normalize_needs(val: Option<&Value>) -> BTreeMap<String, CiNeedOption> {
-    let mut map = BTreeMap::new();
+/// Normalizes a `needs` field into `(name, option)` pairs preserving sequence order for YAML arrays.
+pub(crate) fn normalize_needs_ordered(val: Option<&Value>) -> Vec<(String, CiNeedOption)> {
+    let mut pairs = Vec::new();
     let Some(v) = val else {
-        return map;
+        return pairs;
     };
 
     match v {
         Value::String(s) => {
-            map.insert(
+            pairs.push((
                 s.clone(),
                 CiNeedOption {
                     enabled: true,
                     args: None,
                 },
-            );
+            ));
         }
         Value::Array(arr) => {
             for item in arr {
                 if let Value::String(s) = item {
-                    map.insert(
+                    pairs.push((
                         s.clone(),
                         CiNeedOption {
                             enabled: true,
                             args: None,
                         },
-                    );
+                    ));
                 }
             }
         }
@@ -111,13 +114,13 @@ pub fn normalize_needs(val: Option<&Value>) -> BTreeMap<String, CiNeedOption> {
             for (k, opt) in obj {
                 match opt {
                     Value::Bool(b) => {
-                        map.insert(
+                        pairs.push((
                             k.clone(),
                             CiNeedOption {
                                 enabled: *b,
                                 args: None,
                             },
-                        );
+                        ));
                     }
                     Value::Object(inner) => {
                         let enabled = inner
@@ -128,25 +131,25 @@ pub fn normalize_needs(val: Option<&Value>) -> BTreeMap<String, CiNeedOption> {
                             .get("args")
                             .and_then(|a| a.as_str())
                             .map(ToString::to_string);
-                        map.insert(k.clone(), CiNeedOption { enabled, args });
+                        pairs.push((k.clone(), CiNeedOption { enabled, args }));
                     }
                     Value::Null => {
-                        map.insert(
+                        pairs.push((
                             k.clone(),
                             CiNeedOption {
                                 enabled: false,
                                 args: None,
                             },
-                        );
+                        ));
                     }
                     _ => {
-                        map.insert(
+                        pairs.push((
                             k.clone(),
                             CiNeedOption {
                                 enabled: true,
                                 args: None,
                             },
-                        );
+                        ));
                     }
                 }
             }
@@ -154,7 +157,12 @@ pub fn normalize_needs(val: Option<&Value>) -> BTreeMap<String, CiNeedOption> {
         _ => {}
     }
 
-    map
+    pairs
+}
+
+/// Normalizes a `needs` field from string, array, or object into a map.
+pub fn normalize_needs(val: Option<&Value>) -> BTreeMap<String, CiNeedOption> {
+    normalize_needs_ordered(val).into_iter().collect()
 }
 
 /// Computes Cartesian product matrix cells filtering out excluded coordinates.
@@ -278,6 +286,12 @@ impl CiResolver {
         // 3. Filter out disabled/false dependencies
         for node in merged_nodes.values_mut() {
             node.needs.retain(|_, opt| opt.enabled);
+            node.needs_order.retain(|k| node.needs.contains_key(k));
+            for k in node.needs.keys() {
+                if !node.needs_order.contains(k) {
+                    node.needs_order.push(k.clone());
+                }
+            }
         }
 
         let declared_nodes: BTreeSet<String> = merged_nodes.keys().cloned().collect();
@@ -421,7 +435,7 @@ impl CiResolver {
             matrix_cells.len()
         };
 
-        // 9. Collect tools in topological order
+        // 9. Collect tools in topological order (SPEC-0003 requirement 17 preserves sequence order)
         let mut tool_order: Vec<String> = Vec::new();
         let mut tool_counts: BTreeMap<String, usize> = BTreeMap::new();
         let mut tool_args: BTreeMap<String, String> = BTreeMap::new();
@@ -432,7 +446,10 @@ impl CiResolver {
                 let is_cell = cell_nodes.contains(n);
                 let multiplier = if is_cell { num_cells } else { 1 };
 
-                for (dep, opt) in &node_def.needs {
+                for dep in &node_def.needs_order {
+                    let Some(opt) = node_def.needs.get(dep) else {
+                        continue;
+                    };
                     if !declared_nodes.contains(dep) {
                         let tool = dep.clone();
                         if !tool_order.contains(&tool) {
@@ -511,8 +528,25 @@ impl CiResolver {
 
         for (name, node_val) in nodes_obj {
             let entry = dest.entry(name.clone()).or_default();
-            let parsed_needs = normalize_needs(node_val.get("needs"));
-            entry.needs.extend(parsed_needs);
+            let ordered = normalize_needs_ordered(node_val.get("needs"));
+            if matches!(node_val.get("needs"), Some(Value::Array(_))) {
+                let seq_keys: Vec<String> = ordered.iter().map(|(k, _)| k.clone()).collect();
+                entry.needs_order.retain(|k| !seq_keys.contains(k));
+                for k in seq_keys {
+                    if !entry.needs_order.contains(&k) {
+                        entry.needs_order.push(k);
+                    }
+                }
+            } else {
+                for (k, _) in &ordered {
+                    if !entry.needs_order.contains(k) {
+                        entry.needs_order.push(k.clone());
+                    }
+                }
+            }
+            for (k, opt) in ordered {
+                entry.needs.insert(k, opt);
+            }
 
             if let Some(goal) = node_val.get("goal").and_then(|g| g.as_bool()) {
                 entry.goal = Some(goal);
@@ -602,5 +636,36 @@ mod tests {
         assert!(res.runs.is_empty());
         let tool = CiResolver::resolve_goal(&doc, "cargo-fmt");
         assert_eq!(tool.reject.as_deref(), Some("unknown-goal"));
+    }
+
+    // SPEC-0003 requirement 17: a YAML sequence in `needs` keeps declared order within a node.
+    #[test]
+    fn sequence_needs_keeps_declared_order_within_a_node() {
+        let doc = json!({
+            "nodes": {
+                "hygiene": {
+                    "needs": ["toolchain-check", "projectfile-check", "spec-check", "stages-check", "zero-io-domain"]
+                },
+                "check": {
+                    "goal": true,
+                    "needs": ["hygiene", "cargo-fmt", "cargo-clippy", "cargo-test"]
+                }
+            }
+        });
+        let res = CiResolver::resolve_fixture(&doc);
+        assert_eq!(res.reject, None);
+        assert_eq!(
+            res.runs,
+            vec![
+                "toolchain-check",
+                "projectfile-check",
+                "spec-check",
+                "stages-check",
+                "zero-io-domain",
+                "cargo-fmt",
+                "cargo-clippy",
+                "cargo-test",
+            ]
+        );
     }
 }

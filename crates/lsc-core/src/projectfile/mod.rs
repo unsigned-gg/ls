@@ -9,6 +9,7 @@
 //! - Deterministic execution orders and tag matrices.
 
 pub mod ci;
+pub mod gha_target;
 pub mod image;
 pub mod interp;
 pub mod just_target;
@@ -18,6 +19,7 @@ pub use ci::{
     compute_matrix_cells, normalize_needs, CiMatrixDef, CiNeedOption, CiNode, CiResolveResult,
     CiResolver,
 };
+pub use gha_target::{GhaCompiler, GhaTargetOptions};
 pub use image::{ImageCellResult, ImageResolveResult, ImageResolver};
 pub use interp::{
     find_references, find_spans, ProjectfileInterpolator, ReferenceSpan, TemplateSpan,

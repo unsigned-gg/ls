@@ -157,13 +157,14 @@ impl XtaskCompiler {
     /// Compiles a resolved CI execution plan into a deterministic Rust `xtask` module.
     #[must_use]
     pub fn compile(resolved: &CiResolveResult, options: &XtaskTargetOptions) -> String {
-        Self::compile_with_tools(resolved, options, &[])
+        Self::compile_with_tools(resolved, options, &[], &BTreeMap::new())
     }
 
     fn compile_with_tools(
         resolved: &CiResolveResult,
         options: &XtaskTargetOptions,
         tools: &[(String, String, String)],
+        runs: &BTreeMap<String, String>,
     ) -> String {
         let mut out = String::new();
         let fn_ident = Self::sanitize_ident(&options.default_target).to_ascii_lowercase();
@@ -229,10 +230,31 @@ impl XtaskCompiler {
         out.push_str("/// Topologically ordered CI stages lowered from `org.projectfile.ci`.\n");
         out.push_str(&format!("pub const {table}: &[(&str, &[&str])] = &[\n"));
         for tool in &resolved.runs {
-            let arg_list = Self::split_args(resolved.args.get(tool).map(String::as_str));
+            let (program, arg_list) = if options.dispatch {
+                (
+                    tool.clone(),
+                    Self::split_args(resolved.args.get(tool).map(String::as_str)),
+                )
+            } else if let Some(cmd_line) = runs.get(tool) {
+                let mut words = Self::split_args(Some(cmd_line.as_str()));
+                let prog = if words.is_empty() {
+                    tool.clone()
+                } else {
+                    words.remove(0)
+                };
+                words.extend(Self::split_args(
+                    resolved.args.get(tool).map(String::as_str),
+                ));
+                (prog, words)
+            } else {
+                (
+                    tool.clone(),
+                    Self::split_args(resolved.args.get(tool).map(String::as_str)),
+                )
+            };
             let formatted_args: Vec<String> = arg_list.iter().map(|a| format!("{a:?}")).collect();
             out.push_str(&format!(
-                "    ({tool:?}, &[{}]),\n",
+                "    ({program:?}, &[{}]),\n",
                 formatted_args.join(", ")
             ));
         }
@@ -300,7 +322,8 @@ impl XtaskCompiler {
         options: &XtaskTargetOptions,
     ) -> String {
         let tools = Self::tools_from_doc(doc);
-        Self::compile_with_tools(resolved, options, &tools)
+        let runs = Self::runs_from_doc(doc);
+        Self::compile_with_tools(resolved, options, &tools, &runs)
     }
 
     /// Lowers projectfile text to a Rust `xtask` module in one call (SPEC-0003
@@ -378,6 +401,32 @@ impl XtaskCompiler {
     fn tool_row(row: &Value) -> Option<(String, String, String)> {
         let field = |key: &str| row.get(key).and_then(Value::as_str).map(str::to_string);
         Some((field("crate")?, field("version")?, field("bin")?))
+    }
+
+    /// Stage command lines from `gg.unsigned.ls.run` (SPEC-0003 requirement 15).
+    pub(crate) fn runs_from_doc(doc: &Value) -> BTreeMap<String, String> {
+        let mut out = BTreeMap::new();
+        let Some(run_map) = doc
+            .get("gg")
+            .and_then(|g| g.get("unsigned"))
+            .and_then(|u| u.get("ls"))
+            .and_then(|l| l.get("run"))
+            .and_then(Value::as_object)
+        else {
+            return out;
+        };
+        for (stage, val) in run_map {
+            let cmd = val
+                .as_str()
+                .or_else(|| val.get("cmd").and_then(Value::as_str));
+            if let Some(s) = cmd {
+                let trimmed = s.trim();
+                if !trimmed.is_empty() {
+                    out.insert(stage.clone(), trimmed.to_string());
+                }
+            }
+        }
+        out
     }
 
     fn split_args(raw: Option<&str>) -> Vec<String> {
@@ -758,5 +807,31 @@ org:
         let code = XtaskCompiler::compile_from_doc(&doc, &resolved, &XtaskTargetOptions::default());
         assert!(code.contains("Command::new(tool)"));
         assert!(!code.contains("run_stage"));
+    }
+
+    // SPEC-0003 requirement 15: gg.unsigned.ls.run gives the command line in spawn mode,
+    // while dispatch mode keeps the canonical stage name for the host closure.
+    #[test]
+    fn run_section_gives_command_line_in_spawn_mode_only() {
+        let doc = json!({
+            "gg": { "unsigned": { "ls": { "run": {
+                "cargo-fmt": "cargo fmt --all -- --check"
+            } } } },
+            "org": { "projectfile": { "ci": sample_doc() } }
+        });
+        let resolved = super::super::ci::CiResolver::resolve_fixture(&sample_doc());
+        let spawn =
+            XtaskCompiler::compile_from_doc(&doc, &resolved, &XtaskTargetOptions::default());
+        assert!(
+            spawn.contains(
+                "(\"cargo\", &[\"fmt\", \"--all\", \"--\", \"--check\", \"--all\", \"--\", \"--check\"])"
+            ),
+            "spawn mode did not use gg.unsigned.ls.run:\n{spawn}"
+        );
+        let disp = XtaskCompiler::compile_from_doc(&doc, &resolved, &dispatch());
+        assert!(
+            disp.contains("(\"cargo-fmt\", &[\"--all\", \"--\", \"--check\"])"),
+            "dispatch mode must keep stage name:\n{disp}"
+        );
     }
 }

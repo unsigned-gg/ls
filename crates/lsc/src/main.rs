@@ -26,7 +26,7 @@ fn print_usage() {
     println!("    lsc pf interp <FILE>   Interpolate projectfile expressions (§3.8)");
     println!("    lsc pf ci resolve <F>  Resolve org.projectfile.ci intent DAG");
     println!(
-        "    lsc pf ci generate <F> Lower DAG to Rust xtask or Justfile (--target xtask|just, --dispatch, --goal <node>)"
+        "    lsc pf ci generate <F> Lower DAG to Rust xtask, Justfile, or GHA (--target xtask|just|gha, --dispatch, --goal <node>)"
     );
     println!("    lsc pf image tags <F>  Derive org.projectfile.image variant tags");
     println!("    lsc --version, -v      Print version information");
@@ -224,7 +224,7 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
         println!("USAGE:");
         println!("    lsc pf interp <FILE> [--expr <EXPR>]    Interpolate projectfile (§3.8)");
         println!("    lsc pf ci resolve <FILE>                Resolve org.projectfile.ci DAG");
-        println!("    lsc pf ci generate <FILE> [--target xtask|just] [--dispatch] [--goal <node>] Lower DAG to Rust xtask or Justfile");
+        println!("    lsc pf ci generate <FILE> [--target xtask|just|gha] [--dispatch] [--goal <node>] Lower DAG to Rust xtask, Justfile, or GitHub Actions");
         println!("    lsc pf image tags <FILE>                Derive org.projectfile.image tags");
         return ExitCode::SUCCESS;
     }
@@ -325,7 +325,9 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                                 idx += 2;
                                 continue;
                             }
-                            eprintln!("lsc pf ci generate: --target requires a value (xtask|just)");
+                            eprintln!(
+                                "lsc pf ci generate: --target requires a value (xtask|just|gha)"
+                            );
                             return ExitCode::FAILURE;
                         } else if let Some(val) = args[idx].strip_prefix("--target=") {
                             target = val;
@@ -402,8 +404,12 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                         eprintln!("lsc pf ci generate: --dispatch only applies to --target xtask");
                         return ExitCode::FAILURE;
                     }
-                    if goal.is_some() && !matches!(target, "xtask" | "rust") {
-                        eprintln!("lsc pf ci generate: --goal only applies to --target xtask");
+                    if goal.is_some()
+                        && !matches!(target, "xtask" | "rust" | "gha" | "github-actions")
+                    {
+                        eprintln!(
+                            "lsc pf ci generate: --goal only applies to --target xtask or gha"
+                        );
                         return ExitCode::FAILURE;
                     }
                     // SPEC-0003 requirement 14: a tool pin with a missing field is an error.
@@ -418,14 +424,22 @@ fn handle_projectfile_command(args: &[String]) -> ExitCode {
                     match target {
                         "just" | "justfile" => {
                             let options = lsc::JustTargetOptions::default();
-                            let out =
-                                lsc::JustfileCompiler::compile_from_doc(ci_doc, &res, &options);
+                            let out = lsc::JustfileCompiler::compile_from_doc(&val, &res, &options);
+                            print!("{out}");
+                            ExitCode::SUCCESS
+                        }
+                        "gha" | "github-actions" => {
+                            let mut options = lsc::GhaTargetOptions::default();
+                            if let Some(node) = goal {
+                                options.default_target = node.to_string();
+                            }
+                            let out = lsc::GhaCompiler::compile_from_doc(&val, &res, &options);
                             print!("{out}");
                             ExitCode::SUCCESS
                         }
                         other => {
                             eprintln!(
-                                "lsc pf ci generate: unsupported --target '{other}' (expected 'xtask' or 'just')"
+                                "lsc pf ci generate: unsupported --target '{other}' (expected 'xtask', 'just', or 'gha')"
                             );
                             ExitCode::FAILURE
                         }
