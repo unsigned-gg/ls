@@ -14,4 +14,5 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+lsc-core = { path = "../lsc-core" }
 serde_json = { workspace = true }

@@ -42,6 +42,10 @@ Makefile and the existing CI jobs. Nothing is removed.
 9. **XT-9 (event-driven):** When CI runs for a push or a pull request that changes a Rust, Cargo,
    spec or CI path, or any Markdown file, the job `xtask-ci` shall run `cargo xtask ci` on
    `ubuntu-latest`, the runner the existing Rust jobs use.
+10. **XT-10 (event-driven):** When `ci` finishes, xtask shall assemble a schema-v4
+    `ValidationReceipt` anchored to the checkout commit, working-tree dirtiness, and a BLAKE3
+    `ValidityFingerprint` over the validation inputs, and write it to `XTASK_RECEIPT_PATH` (or
+    `.tools/validation-receipt.json` by default).
 
 ## Design
 
@@ -63,8 +67,8 @@ The code is `crates/xtask/src/gates.rs`. `.tools/` is gitignored.
 
 ## Tasks
 
-- [x] Write the clauses XT-1 to XT-9.
-- [x] Add unit tests named for the clauses, red first, then the gates (XT-1 to XT-8).
+- [x] Write the clauses XT-1 to XT-10.
+- [x] Add unit tests named for the clauses, red first, then the gates (XT-1 to XT-8, XT-10).
 - [x] Add the CI job `xtask-ci` (XT-9).
 
 ## Verification

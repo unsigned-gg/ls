@@ -456,14 +456,172 @@ fn step(ctx: &Ctx, gate: Gate) -> Result<(), String> {
     }
 }
 
-/// Run `ci`'s steps, print the summary, and say whether every step passed.
+/// Assemble a schema-v4 [`lsc_core::ValidationReceipt`] from `ci` step outcomes (XT-10).
+pub fn build_receipt(
+    results: &[StepResult],
+    commit: &str,
+    tree_dirty: bool,
+    cache_state: lsc_core::ReceiptCacheState,
+    cwd: &str,
+) -> lsc_core::ValidationReceipt {
+    let commit_anchored = !commit.is_empty() && commit != "uncommitted" && !tree_dirty;
+    let strength = if commit_anchored {
+        lsc_core::ValidityStrength::Exact
+    } else {
+        lsc_core::ValidityStrength::Advisory
+    };
+    let tools_pin_digest = lsc_core::compute_blake3_hash(
+        TOOLS
+            .iter()
+            .map(|t| format!("{}={}", t.krate, t.version))
+            .collect::<Vec<_>>()
+            .join(",")
+            .as_bytes(),
+    );
+    let pipeline_digest = lsc_core::compute_blake3_hash(
+        CI_STEPS
+            .iter()
+            .map(|g| g.name())
+            .collect::<Vec<_>>()
+            .join(",")
+            .as_bytes(),
+    );
+    let fingerprint = lsc_core::ValidityFingerprint::compute(
+        strength,
+        vec![
+            lsc_core::ValidityInput::new(lsc_core::ValidityInputKind::SourceTree, "HEAD", commit),
+            lsc_core::ValidityInput::new(
+                lsc_core::ValidityInputKind::Toolchain,
+                "tools-rust",
+                TOOLS_RUST,
+            ),
+            lsc_core::ValidityInput::new(
+                lsc_core::ValidityInputKind::Lockfile,
+                "xtask-tools",
+                tools_pin_digest,
+            ),
+            lsc_core::ValidityInput::new(
+                lsc_core::ValidityInputKind::VerifyPipeline,
+                "ci-steps",
+                pipeline_digest,
+            ),
+        ],
+    );
+
+    let mut gates = Vec::with_capacity(results.len());
+    let mut failures = 0_u64;
+    let mut total_secs = 0.0_f64;
+
+    for r in results {
+        let secs = r.secs.unwrap_or(0.0);
+        total_secs += secs;
+        let (result, exit_code) = match r.outcome {
+            Outcome::Passed => (lsc_core::ReceiptResult::Pass, 0),
+            Outcome::Failed(_) => {
+                failures += 1;
+                (lsc_core::ReceiptResult::Fail, 1)
+            }
+            Outcome::NotRun => (lsc_core::ReceiptResult::NotRun, -1),
+        };
+        gates.push(lsc_core::ValidationGateReceipt {
+            name: r.gate.name().to_owned(),
+            result,
+            exit_code,
+            real_seconds: secs,
+            executed_tests: None,
+            passed_tests: None,
+            filtered_tests: None,
+        });
+    }
+
+    let all_passed = failures == 0
+        && !gates.is_empty()
+        && gates
+            .iter()
+            .all(|g| g.result == lsc_core::ReceiptResult::Pass);
+
+    lsc_core::ValidationReceipt {
+        schema_version: lsc_core::VALIDATION_RECEIPT_SCHEMA_VERSION,
+        producer: "cargo-xtask-ci".to_owned(),
+        repo: "ls".to_owned(),
+        started_at: "1970-01-01T00:00:00Z".to_owned(),
+        finished_at: "1970-01-01T00:00:00Z".to_owned(),
+        host: std::env::var("HOSTNAME").unwrap_or_else(|_| "localhost".to_owned()),
+        slot: "worktree".to_owned(),
+        cwd: cwd.to_owned(),
+        cache_state,
+        commit: commit.to_owned(),
+        commit_anchored,
+        tree_dirty,
+        validity_fingerprint: Some(fingerprint),
+        result: if all_passed {
+            lsc_core::ReceiptResult::Pass
+        } else {
+            lsc_core::ReceiptResult::Fail
+        },
+        exit_code: if all_passed { 0 } else { 1 },
+        executed_tests: 0,
+        passed_tests: 0,
+        filtered_tests: 0,
+        checks: gates.len() as u64,
+        failures,
+        real_seconds: total_secs,
+        gates,
+    }
+}
+
+fn probe_git_state(ctx: &Ctx) -> (String, bool) {
+    let head = ctx
+        .command(&["git".to_owned(), "rev-parse".to_owned(), "HEAD".to_owned()])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "uncommitted".to_owned());
+    let dirty = ctx
+        .command(&[
+            "git".to_owned(),
+            "status".to_owned(),
+            "--porcelain".to_owned(),
+            "--untracked-files=normal".to_owned(),
+        ])
+        .output()
+        .map(|o| !o.status.success() || !o.stdout.is_empty())
+        .unwrap_or(true);
+    (head, dirty)
+}
+
+/// Run `ci`'s steps, print the summary, write the validation receipt, and say whether every step passed.
 fn ci(ctx: &Ctx, label: &str) -> bool {
+    let cache_state = if ctx.root.join("target").is_dir() {
+        lsc_core::ReceiptCacheState::Warm
+    } else {
+        lsc_core::ReceiptCacheState::Cold
+    };
     let results = run_steps(&CI_STEPS, |gate| {
         println!("==> {label}: {}", gate.name());
         step(ctx, gate)
     });
     for result in &results {
         println!("{}", summary_line(label, result));
+    }
+    let (commit, tree_dirty) = probe_git_state(ctx);
+    let receipt = build_receipt(
+        &results,
+        &commit,
+        tree_dirty,
+        cache_state,
+        &ctx.root.display().to_string(),
+    );
+    let receipt_path = std::env::var_os("XTASK_RECEIPT_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| ctx.root.join(".tools").join("validation-receipt.json"));
+    if let Some(parent) = receipt_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string_pretty(&receipt) {
+        let _ = std::fs::write(&receipt_path, json);
     }
     results.iter().all(|r| r.outcome == Outcome::Passed)
 }
@@ -916,5 +1074,38 @@ mod tests {
                 "2"
             ])
         );
+    }
+
+    #[test]
+    fn xt10_ci_builds_anchored_validation_receipt_and_fingerprint() {
+        let results = run_steps(&CI_STEPS, |_| Ok(()));
+        let receipt = build_receipt(
+            &results,
+            "1c35983",
+            false,
+            lsc_core::ReceiptCacheState::Warm,
+            "/repo",
+        );
+        assert_eq!(receipt.schema_version, 4);
+        assert!(receipt.commit_anchored);
+        assert!(!receipt.tree_dirty);
+        assert_eq!(receipt.result, lsc_core::ReceiptResult::Pass);
+        assert_eq!(receipt.checks, 9);
+        assert_eq!(receipt.failures, 0);
+        assert!(receipt.validate_fail_closed(false).is_ok());
+
+        let dirty = build_receipt(
+            &results,
+            "1c35983",
+            true,
+            lsc_core::ReceiptCacheState::Warm,
+            "/repo",
+        );
+        assert!(!dirty.commit_anchored);
+        assert_eq!(
+            dirty.validity_fingerprint.as_ref().unwrap().strength,
+            lsc_core::ValidityStrength::Advisory
+        );
+        assert!(dirty.validate_fail_closed(false).is_ok());
     }
 }
